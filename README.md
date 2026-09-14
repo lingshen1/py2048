@@ -156,6 +156,79 @@ A fully self-contained external Python client (`bot_client.py`) is provided that
 
 ---
 
+## Step-by-Step Training & UDP Network Integration Guide
+
+To allow external code to interact with and train on the 2048 game, the system is designed around a lightweight, multiplexed network protocol.
+
+### 1. The UDP Server Command-Action Protocol
+The game server (`2048.py -s`) runs a high-performance UDP server on `0.0.0.0:10000` (by default). The network interface uses simple UTF-8 text command packets and replies instantly with a JSON-serialized game state dictionary.
+
+#### Available Client Commands:
+* **`reset` / `restart`**: Instantly clears the game board, instantiates a fresh game state, and clears `game_over` status. Useful to reset between training epochs.
+* **`w` / `up`**: Slide Up.
+* **`s` / `down`**: Slide Down.
+* **`a` / `left`**: Slide Left.
+* **`d` / `right`**: Slide Right.
+* **`r` / `undo`**: Revert to previous step (Undo).
+* **`i` / `invert`**: Toggle inverted console color blocks.
+* **`q` / `quit`**: Gracefully disconnect the socket and close the game server.
+* **`state` / `get`**: Simply request the current game state without making a move.
+
+#### Server JSON Reply Format:
+On receiving any of the above commands, the server responds to the client's socket address with a JSON payload:
+```json
+{
+    "grid": [[0, 2, 0, 0], [4, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+    "score": 8,
+    "high_score": 1024,
+    "has_won": false,
+    "game_over": false,
+    "recall_count": 0
+}
+```
+
+---
+
+### 2. Step-by-Step Training Procedure
+Below is the precise procedure for booting up the learning environment and executing reinforcement learning training:
+
+#### Step 1: Fire up the Training Arena (Terminal 1)
+Start the UDP game server. This opens the network socket and draws the console screen:
+```bash
+python3 2048.py -s
+```
+*The server begins listening. You can press `Q` on Terminal 1's keyboard at any point to stop it.*
+
+#### Step 2: Trigger the Learning Loop (Terminal 2)
+In another terminal window, start the training client to play and train the neural network over 50 consecutive games:
+```bash
+python3 bot_client.py --train 50
+```
+
+#### Step 3: Watch the Reinforcement Learning in Action
+* **How the Client Thinks**:
+  1. At the start of each game, the client sends a `reset` command over UDP to Terminal 1 to ensure a clean board.
+  2. For every turn, the client reads the grid, extracts normalized log2 features, and runs Expectimax search lookahead. It evaluates final branches by summing the expert heuristics of `-t3` and its own Neural Network's value prediction.
+  3. It sends the best movement key (`w`/`a`/`s`/`d`) to the UDP server.
+  4. It receives the resulting grid. It calculates the normalized reward:
+     $$Reward = \frac{\Delta \text{Score}}{100.0}$$
+  5. It calculates the **Temporal Difference (TD) target** ($Target = Reward + \gamma \cdot Value(S')$) and runs a backward pass to perform stochastic gradient descent (SGD) on the network's synapses ($w_1, b1, w2, b2$).
+  6. When the game ends, the client prints the completed score and automatically loops back to send a `reset` for the next game.
+* **What you see on screen**:
+  * **On Terminal 2**: You see active logs of completed training games:
+    `Game 1/50 starting... Completed! Score: 1024 | Moves: 92`
+  * **On Terminal 1**: You can watch the game board flashing and updating live at hundreds of actions per second as the bot runs through its training games!
+
+#### Step 4: Weights Saving & Evaluation
+* Once all 50 games are completed, the client calculates rolling statistics (average score, highest score) and dumps the fully optimized synaptic weights into `bot_weights.json`.
+* To evaluate the learned weights, run the bot client in play mode:
+  ```bash
+  python3 bot_client.py --play
+  ```
+  This loads your saved weights and lets you watch the trained neural network play a live, step-by-step game on your server screen!
+
+---
+
 ## How the AI Bot Thinks: The Three Core Weights
 
 The grandmaster performance of the `-t3` and `bot_client.py` agents lies in **three distinct layers of mathematical weighting** working in synergy:
