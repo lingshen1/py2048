@@ -2,16 +2,23 @@
 
 A lightweight, terminal-based implementation of the classic 2048 game built specifically for embedded Linux systems (like Luckfox Lyra) running stripped-down Python environments.
 
+Now upgraded with game logging, interactive playback, step-jumping, active state takeover (grabbing control), step recall/undo, a persistent top-20 leaderboard, custom ASCII particle fireworks celebrations, and an auto-playing AI bot!
+
 ---
 
 ## Key Features
 
 * **Zero Hardware/Library Overheads:** Requires no extra `pip` installs beyond `rich`.
-* **Standard-Lib Terminal Input:** Captures instant keypresses using system `stty` commands rather than missing Python modules like `tty` or `termios`.
-* **LCD Screen Optimization:** Features two rendering modes (High-contrast text vs. Full-color background blocks) optimized for small SPI/I2C LCD displays.
-* **Arrow Key & WASD Support:** Intercepts standard ANSI escape sequences for seamless directional control without requiring the **Enter** key.
-* **Persistent High Scores:** Automatically saves and loads your highest score locally to `high_scores.json`.
-* **Full Game State Tracking:** Detects victory (2048 tile reached) with option to continue, and handles game-over states when no valid moves remain.
+* **Standard-Lib Terminal Input:** Captures instant keypresses using standard system `stty` utility rather than missing Python modules like `tty` or `termios`.
+* **Step Recall / Undo (`R`):** Instantly undoes moves to restore the board, score, and state. Tracks the number of recalls used throughout the run.
+* **Game Action Logging:** Outputs highly detailed, dated log files under the `logs/` directory containing grids, moves made, score shifts, and exact tile insertions.
+* **Interactive Playback (`-p`):** Replays logs interactively. Supports pausing, step-by-step scrubbing, dynamic interval shifting, and multiplier speed scales (`<`/`>`).
+* **Active Taking Over (`G`):** Press `G` at any point during playback to **grab control** of the past game and start playing live from that exact step (with full undo history kept!).
+* **Step Jumping (`J`):** Instantly warp to any step number during playback to analyze or take over the game.
+* **Auto-Play AI Bot Mode (`-t`):** Runs the game automatically using random movements. It simulates potential outcomes and dynamically filters out moves that make no effect to avoid infinite loops.
+* **Top-20 Leaderboard:** Stores up to 20 top records in `high_scores.json` detailing Player Name, Score, Recalls, and Timestamp.
+* **ASCII Fireworks "Video":** Plays a physics-based, gravity-simulated particle fireworks show in flashing console colors whenever a leaderboard high score is achieved.
+* **Global Contextual Help Overlay (`H`/`?`):** Instantly displays a modal help screen tailored to your current mode (Active Play, Playback, or Bot Mode).
 
 ---
 
@@ -22,63 +29,93 @@ A lightweight, terminal-based implementation of the classic 2048 game built spec
 * **`rich` module** (pre-installed on standard Luckfox image)
 * Standard Linux `stty` utility (built into BusyBox/Linux)
 
-### Run the Game
+### Running Options
 
-```bash
-python3 2048.py
-```
+| Command | Mode |
+| :--- | :--- |
+| **`python3 2048.py`** | Start a standard interactive game |
+| **`python3 2048.py -p`** or **`--playback`** | Replay and manage recorded game logs |
+| **`python3 2048.py -t`** or **`--test`** | Launch the AI Bot automated test run |
 
-### Controls
+---
+
+## Game Controls
+
+### 1. Active Gameplay Mode
 
 | Key / Input | Action |
 | :--- | :--- |
 | **Arrow Keys** or **W / A / S / D** | Move tiles (Up, Left, Down, Right) |
+| **`R`** | Recall (Undo) last step (increments recall counter) |
 | **`I`** | Toggle display mode (High-Contrast Text ↔ Inverted Color Blocks) |
-| **`Q`** | Quit game |
+| **`H`** or **`?`** | Show modal shortcuts help screen |
+| **`Q`** | Quit and save score to leaderboard (if qualified) |
+
+### 2. Interactive Playback Replay Mode
+
+| Key / Input | Action |
+| :--- | :--- |
+| **`Space`** | Pause / Resume automated replay |
+| **`Left Arrow` / `Right Arrow`** | Step backward / forward frame-by-frame |
+| **`Up Arrow` / `Down Arrow`** | Fine-tune frame interval duration (+/- 0.1s) |
+| **`<` / `>`** (or **`,` / `.`**) | Halve / Double replay speed multiplier |
+| **`J`** | Jump directly to any recorded step number |
+| **`G`** | **Grab Control** (transition into live play from this frame!) |
+| **`I`** | Toggle display mode |
+| **`H`** or **`?`** | Show modal playback shortcuts help |
+| **`Q`** | Exit playback |
+
+### 3. Auto-Play Bot Mode
+
+| Key / Input | Action |
+| :--- | :--- |
+| **`I`** | Toggle display mode |
+| **`H`** or **`?`** | Show modal auto-play help |
+| **`Q`** | Stop bot auto-play and exit |
 
 ---
 
 ## Technical Implementation Details
 
-### 1. Terminal Handling without `tty` / `termios`
-Embedded Python distributions often strip out C-extension standard library modules like `tty` and `termios` to save flash storage. To achieve single-character keypresses without needing **Enter**:
-
-* **`RawTerminal` Context Manager:** Uses `os.system("stty -icanon -echo")` to put the terminal into non-canonical (raw) mode and disable character echo. Upon exiting, it restores the previous terminal state saved via `stty -g`.
-* **`get_key()` Interceptor:** Reads single bytes directly from `sys.stdin`. When an escape byte (`\x1b`) is detected, it reads the subsequent 2 bytes to match ANSI escape sequences:
-  * `\x1b[A` → Up (`w`)
-  * `\x1b[B` → Down (`s`)
-  * `\x1b[C` → Right (`d`)
-  * `\x1b[D` → Left (`a`)
-
-### 2. Matrix Transformations & Sliding Algorithm
-All movement logic is reduced to a single, pure 1D function: `_slide_left()`. Any directional move transforms the grid matrix into a left-slide operation, applies the merge logic, and transforms it back:
-
-* **Left (`A`):** Applied directly to each row.
-* **Right (`D`):** Reverses each row → Slides Left → Reverses row back.
-* **Up (`W`):** Transposes matrix (`zip(*grid)`) → Slides Left → Transposes back.
-* **Down (`S`):** Transposes matrix → Reverses each column → Slides Left → Reverses back → Transposes back.
-
+### 1. Game State Action Logging & Parsing
+Every game automatically outputs detailed step-by-step logs into `logs/2048_YYYYMMDD_HHMMSS.log` using a structured, human-readable text block system:
 ```text
-Original Grid            Transposed (Up/Down)         Reversed (Right/Down)
-[ 2 , 0 , 0 , 0 ]       [ 2 , 0 , 2 , 4 ]            [ 0 , 0 , 0 , 2 ]
-[ 8 , 0 , 0 , 0 ]  ==>  [ 0 , 0 , 0 , 0 ]     ==>    [ 0 , 0 , 0 , 8 ]
-[ 2 , 0 , 2 , 0 ]       [ 0 , 0 , 2 , 0 ]            [ 0 , 2 , 0 , 2 ]
-[ 4 , 0 , 0 , 0 ]       [ 0 , 0 , 0 , 0 ]            [ 0 , 0 , 0 , 4 ]
+--- STEP 1 ---
+Move: a
+Score: 4
+Grid:
+4 0 0 0
+2 0 0 0
+0 0 0 0
+0 0 2 0
+Added Tile: 2 at (3, 2)
 ```
+The playback system reads this log directory, formats files dynamically with localized timestamps, parses step frames sequentially into memory, and loads them into a fast, non-blocking rendering engine.
 
-### 3. Display Rendering & Dual Contrast Modes
-The game interface uses `rich.table.Table` nested inside `rich.panel.Panel`. On small embedded screens, solid background fills often blur together or wash out:
+### 2. Recall (Undo) History Stack
+The recall function utilizes a deep-copied history stack `self.history = []`. Before any move that changes the grid is applied, the game pushes the pre-move grid state, score, win flags, and metrics into the stack.
+* Reverting pops the last dictionary, restores the state, increments `self.recall_count`, and appends a `Move: Recall` entry to the log file to maintain playback alignment.
 
-* **Default Mode (`FG_TILE_STYLES`):** Applies bright foreground text colors on the terminal's native background, preserving pixel clarity on small LCD displays.
-* **Inverted Mode (`BG_TILE_STYLES`):** Toggled via `I`, uses full background block colors matching the classic 2048 layout.
-
-### 4. Score Persistence
-Scores are automatically verified after every valid move. If `score > high_score`, the updated value is saved to `high_scores.json`:
-
-```json
-{
-  "high_score": 2048
-}
+### 3. Takeover (Control Grabbing) Mechanics
+When `G` is pressed in playback, the engine suspends playback, extracts the sliced list of frames up to the current frame (`frames[:step_idx]`), and instantiates a fully interactive `Game2048` session using:
+```python
+Game2048.from_state(grid, score, history_frames)
 ```
+This restores the exact visual board, score, and populates the undo history list with preceding steps—allowing players to undo moves that happened *before* they took control of the log!
 
-If the file is deleted or corrupt, the game safely catches the exception and resets the local high score counter to `0`.
+### 4. Top-20 High Scores & Celebrations
+The high score persistence handles JSON arrays gracefully. When the game ends, it checks if the player's score qualifies for the top 20. If so:
+1. It suspends RawTerminal mode.
+2. Runs `play_fireworks_video()`, generating floating ASCII particles utilizing simple vector mathematics and gravity simulation:
+   * Particle position: $X_{new} = X + V_x$, $Y_{new} = Y + V_y$
+   * Gravity factor: $V_{y, new} = V_y + 0.08$
+3. Prompts the user for their name via standard `input()`.
+4. Saves the details (name, score, recalls used, localized timestamp) into `high_scores.json`.
+5. Prints a beautifully formatted Rich table.
+
+### 5. Non-Blocking Event Replay Loop
+To allow keyboard navigation (pausing, speeding up, changing options) during live playback or automated bot runs, the engine implements a portable, non-blocking input wrapper utilizing `select.select()` to poll standard input:
+```python
+rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+```
+This guarantees high keyboard responsiveness on any BusyBox/Linux terminal without CPU-hogging busy-waiting.
