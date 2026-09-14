@@ -1048,6 +1048,188 @@ def run_strategic_test_mode():
     check_and_save_leaderboard(game.score, game.recall_count)
 
 
+def calculate_survival_probability(grid):
+    empty_cells = [(r, c) for r in range(4) for c in range(4) if grid[r][c] == 0]
+    if not empty_cells:
+        for d in ["s", "d", "a", "w"]:
+            _, changed, _ = simulate_move(grid, d)
+            if changed:
+                return 1.0
+        return 0.0
+        
+    safe_spawns = 0
+    total_spawns = len(empty_cells) * 2
+    
+    for r, c in empty_cells:
+        for spawn_val in [2, 4]:
+            grid[r][c] = spawn_val
+            has_move = False
+            for d in ["s", "d", "a", "w"]:
+                _, changed, _ = simulate_move(grid, d)
+                if changed:
+                    has_move = True
+                    break
+            if has_move:
+                safe_spawns += 1
+            grid[r][c] = 0
+            
+    return safe_spawns / total_spawns
+
+
+def evaluate_grid_t3(grid):
+    W_MATRIX = [
+        [3,  2,  1,  0],
+        [4,  5,  6,  7],
+        [11, 10, 9,  8],
+        [12, 13, 14, 15]
+    ]
+    
+    monotonicity_score = 0
+    max_tile = 0
+    max_r, max_c = 0, 0
+    empty_cells = 0
+    
+    for r in range(4):
+        for c in range(4):
+            val = grid[r][c]
+            if val > max_tile:
+                max_tile = val
+                max_r, max_c = r, c
+            if val == 0:
+                empty_cells += 1
+            else:
+                power = math.log2(val)
+                weight = 4 ** W_MATRIX[r][c]
+                monotonicity_score += power * weight
+                
+    score = monotonicity_score
+    
+    if max_r == 3 and max_c == 3:
+        score += (4 ** 16) * math.log2(max_tile)
+    else:
+        score -= (4 ** 17) * math.log2(max_tile)
+        
+    bottom_row_full = all(grid[3][c] != 0 for c in range(4))
+    if bottom_row_full:
+        score += 4 ** 14
+    else:
+        empty_bottom = sum(1 for c in range(4) if grid[3][c] == 0)
+        score -= (4 ** 14) * empty_bottom
+        
+    smoothness = 0
+    for r in range(4):
+        for c in range(4):
+            if grid[r][c] != 0:
+                if c < 3 and grid[r][c] == grid[r][c+1]:
+                    smoothness += math.log2(grid[r][c]) * (4 ** W_MATRIX[r][c])
+                if r < 3 and grid[r][c] == grid[r+1][c]:
+                    smoothness += math.log2(grid[r][c]) * (4 ** W_MATRIX[r][c])
+    score += smoothness
+    
+    score += empty_cells * (4 ** 9)
+    return score
+
+
+def expectimax_t3(grid, depth, is_player):
+    empty_cells = [(r, c) for r in range(4) for c in range(4) if grid[r][c] == 0]
+    
+    valid_moves = []
+    for d in ["s", "d", "a", "w"]:
+        _, changed, _ = simulate_move(grid, d)
+        if changed:
+            valid_moves.append(d)
+            
+    if is_player and not valid_moves:
+        return -10**18 + (depth * 10**12)
+        
+    if depth == 0:
+        return evaluate_grid_t3(grid)
+        
+    if is_player:
+        best_score = -float('inf')
+        for d in valid_moves:
+            next_grid, _, _ = simulate_move(grid, d)
+            score = expectimax_t3(next_grid, depth - 1, False)
+            if d in ["a", "w"]:
+                score -= (4 ** 14)
+            best_score = max(best_score, score)
+        return best_score
+    else:
+        if not empty_cells:
+            return evaluate_grid_t3(grid)
+            
+        total_score = 0
+        for r, c in empty_cells:
+            grid[r][c] = 2
+            score_2 = expectimax_t3(grid, depth - 1, True)
+            grid[r][c] = 4
+            score_4 = expectimax_t3(grid, depth - 1, True)
+            grid[r][c] = 0
+            total_score += 0.9 * score_2 + 0.1 * score_4
+            
+        return total_score / len(empty_cells)
+
+
+def run_predictive_test_mode():
+    game = Game2048()
+    game.auto_play = True
+    
+    with RawTerminal():
+        while True:
+            game.render()
+            
+            if not game.can_move():
+                console.print(
+                    "\n[bold red]💀 GAME OVER! No more valid moves.[/bold red]"
+                )
+                console.print(
+                    f"[bold yellow]Final Score: {game.score} | Best: {game.high_score}[/bold yellow]\n"
+                )
+                break
+                
+            key = get_key_nonblocking(0.1)
+            if key == "q":
+                console.print("\n[yellow]Auto-play stopped by user.[/yellow]\n")
+                break
+            elif key == "i":
+                game.inverted_mode = not game.inverted_mode
+            elif key in ["h", "?"]:
+                show_help_screen("test")
+                
+            empty_count = sum(1 for r in range(4) for c in range(4) if game.grid[r][c] == 0)
+            depth = 4 if empty_count < 5 else (3 if empty_count < 9 else 2)
+            
+            best_move = None
+            best_score = -float('inf')
+            
+            for d in ["s", "d", "a", "w"]:
+                next_grid, changed, _ = simulate_move(game.grid, d)
+                if changed:
+                    score = expectimax_t3(next_grid, depth - 1, False)
+                    survival_prob = calculate_survival_probability(next_grid)
+                    
+                    if survival_prob < 1.0:
+                        score -= (1.0 - survival_prob) * (10 ** 16)
+                    else:
+                        score += (4 ** 12)
+                        
+                    if d in ["a", "w"]:
+                        score -= (4 ** 14)
+                        
+                    if score > best_score:
+                        best_score = score
+                        best_move = d
+                        
+            if best_move is not None:
+                if game.has_won:
+                    game.won_announced = True
+                game.move(best_move)
+            else:
+                break
+                
+    check_and_save_leaderboard(game.score, game.recall_count)
+
+
 def run_active_game(game):
     aborted = False
     with RawTerminal():
@@ -1100,8 +1282,11 @@ def main():
     elif len(sys.argv) > 1 and sys.argv[1] in ["-t1", "--test1"]:
         run_random_test_mode()
         return
-    elif len(sys.argv) > 1 and sys.argv[1] in ["-t2", "--test2", "-t", "--test"]:
+    elif len(sys.argv) > 1 and sys.argv[1] in ["-t2", "--test2"]:
         run_strategic_test_mode()
+        return
+    elif len(sys.argv) > 1 and sys.argv[1] in ["-t3", "--test3", "-t", "--test"]:
+        run_predictive_test_mode()
         return
 
     game = Game2048()

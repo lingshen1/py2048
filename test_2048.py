@@ -271,6 +271,50 @@ Added Tile: 2 at (3, 2)
         score = game_module.expectimax(grid, depth=2, is_player=True)
         self.assertTrue(isinstance(score, (int, float)))
 
+    def test_calculate_survival_probability(self):
+        safe_grid = [
+            [2, 0, 0, 0],
+            [0, 2, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+        ]
+        self.assertEqual(game_module.calculate_survival_probability(safe_grid), 1.0)
+        
+        tight_grid = [
+            [2, 4, 8, 16],
+            [32, 64, 128, 256],
+            [512, 1024, 2048, 4096],
+            [8192, 16384, 32768, 0]
+        ]
+        self.assertEqual(game_module.calculate_survival_probability(tight_grid), 0.0)
+
+    def test_evaluate_grid_t3(self):
+        grid_good = [
+            [2, 4, 8, 16],
+            [32, 64, 128, 256],
+            [512, 1024, 2048, 4096],
+            [8192, 16384, 32768, 65536]
+        ]
+        grid_bad = [
+            [65536, 32768, 16384, 8192],
+            [512, 1024, 2048, 4096],
+            [32, 64, 128, 256],
+            [2, 4, 8, 16]
+        ]
+        score_good = game_module.evaluate_grid_t3(grid_good)
+        score_bad = game_module.evaluate_grid_t3(grid_bad)
+        self.assertTrue(score_good > score_bad)
+
+    def test_expectimax_t3(self):
+        grid = [
+            [2, 4, 2, 4],
+            [4, 2, 4, 2],
+            [2, 4, 2, 4],
+            [4, 2, 4, 0]
+        ]
+        score = game_module.expectimax_t3(grid, depth=2, is_player=True)
+        self.assertTrue(isinstance(score, (int, float)))
+
 
 if __name__ == "__main__":
     unittest.main()

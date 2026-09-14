@@ -36,7 +36,8 @@ Now upgraded with game logging, interactive playback, step-jumping, active state
 | **`python3 2048.py`** | Start a standard interactive game |
 | **`python3 2048.py -p`** or **`--playback`** | Replay and manage recorded game logs |
 | **`python3 2048.py -t1`** or **`--test1`** | Launch the Random AI Bot (moves randomly, avoids useless directions) |
-| **`python3 2048.py -t2`** or **`--test2`** (or **`-t`**) | Launch the Strategic AI Bot (Expectimax Grandmaster AI) |
+| **`python3 2048.py -t2`** or **`--test2`** | Launch the Strategic AI Bot (Expectimax corner-locking AI) |
+| **`python3 2048.py -t3`** or **`--test3`** (or **`-t`**) | Launch the Predictive AI Bot (Predictive Grandmaster AI with Survival Weighting) |
 
 ---
 
