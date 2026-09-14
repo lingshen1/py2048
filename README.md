@@ -122,3 +122,34 @@ To allow keyboard navigation (pausing, speeding up, changing options) during liv
 rlist, _, _ = select.select([sys.stdin], [], [], timeout)
 ```
 This guarantees high keyboard responsiveness on any BusyBox/Linux terminal without CPU-hogging busy-waiting.
+
+---
+
+## Trainable Neural Network UDP Bot Client (`bot_client.py`)
+
+A fully self-contained external Python client (`bot_client.py`) is provided that plays the game over UDP by connecting to the 2048 game server.
+
+### Features
+* **Xavier-Initialized Neural Network**: Built entirely using the standard Python library (no TensorFlow/PyTorch required!). Implements forward propagation, ReLU activation, backpropagation, and stochastic gradient descent (SGD).
+* **Heuristic-Guided Policy (AlphaGo-Style)**: Pairs the Neural Network with the expert-grade heuristics of `-t3` (corner-locking, monotonicity, full bottom-row) to guide the search.
+* **Temporal Difference (TD) Learning**: Trains the value network in real-time. On every action, it computes the reinforcement learning TD-target:
+  $$Target = Reward + \gamma \cdot Value(S')$$
+  and backpropagates the loss error to optimize the state-value weights.
+* **Weights Persistence**: Automatically saves and loads trained weights from `bot_weights.json`.
+
+### How to Use the Bot Client
+
+1. **Start the 2048 UDP Game Server** in one terminal:
+   ```bash
+   python3 2048.py -s
+   ```
+
+2. **Run the Bot Client to Play** in another terminal:
+   ```bash
+   python3 bot_client.py --play
+   ```
+
+3. **Train the Neural Network** for a specified number of games (e.g., 50 games):
+   ```bash
+   python3 bot_client.py --train 50
+   ```

@@ -1268,7 +1268,10 @@ def run_udp_server(port=10000):
                     data, addr = server_socket.recvfrom(1024)
                     msg = data.decode("utf-8").strip().lower()
                     
-                    if msg in ["w", "up"]:
+                    if msg in ["reset", "restart"]:
+                        game = Game2048()
+                        game_over = False
+                    elif msg in ["w", "up"]:
                         if not game_over:
                             if game.has_won:
                                 game.won_announced = True

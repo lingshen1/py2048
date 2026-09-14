@@ -14,6 +14,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 import importlib
 game_module = importlib.import_module("2048")
+import bot_client
 
 
 class TestGame2048(unittest.TestCase):
@@ -343,6 +344,30 @@ Added Tile: 2 at (3, 2)
         state = json.loads(sent_data.decode("utf-8"))
         self.assertIn("grid", state)
         self.assertIn("score", state)
+
+    def test_nn_forward_backward(self):
+        net = bot_client.BoardValueNetwork()
+        features = [0.1] * 16
+        
+        val_before = net.forward(features)
+        self.assertTrue(isinstance(val_before, float))
+        
+        net.backward(features, val_before + 1.0)
+        
+        val_after = net.forward(features)
+        self.assertTrue(val_after > val_before)
+
+    def test_client_simulate_move(self):
+        grid = [
+            [2, 2, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+        ]
+        next_grid, changed, gain = bot_client.simulate_move(grid, "a")
+        self.assertTrue(changed)
+        self.assertEqual(gain, 4)
+        self.assertEqual(next_grid[0], [4, 0, 0, 0])
 
 
 if __name__ == "__main__":
