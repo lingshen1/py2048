@@ -153,3 +153,39 @@ A fully self-contained external Python client (`bot_client.py`) is provided that
    ```bash
    python3 bot_client.py --train 50
    ```
+
+---
+
+## How the AI Bot Thinks: The Three Core Weights
+
+The grandmaster performance of the `-t3` and `bot_client.py` agents lies in **three distinct layers of mathematical weighting** working in synergy:
+
+### 1. Heuristic Board Weights (The "Symmetric Flow" Guide)
+The core heuristic weights are structured as a snake-like gradient wrapping upwards from the bottom-right corner:
+```python
+W_MATRIX = [
+    [3,  2,  1,  0],   # Row 0
+    [4,  5,  6,  7],   # Row 1
+    [11, 10, 9,  8],   # Row 2
+    [12, 13, 14, 15]   # Row 3 (Bottom)
+]
+```
+
+* **Exponential Scaling ($4^W$):** Instead of multiplying a tile value directly, the bot multiplies the logarithm of the tile value by $4^{\text{weight\_index}}$. For example, a $1024$ tile at `(3, 3)` (weight 15) is scored as $10 \times 4^{15} \approx 10.7\text{ Billion}$, while sliding to `(3, 2)` (weight 14) drops its score to $10 \times 4^{14} \approx 2.6\text{ Billion}$.
+* **Strategic Utility:** This massive exponential drop-off creates an intense "gravitational pull" that forces the largest numbers to stay strictly locked in the bottom-right corner. It sets up a monotonic descending slope where smaller tiles naturally flow down the "snake slide" into larger ones, creating effortless, automatic merge cascades.
+
+### 2. Survival Probability Weights (The "Lookahead Safety" Shield)
+A common failure for basic 2048 bots is greediness—making a high-scoring merge that collapses empty spaces and locks the board on the very next turn (sudden death). The predictive bot solves this by calculating the **Survival Probability ($P_{\text{survival}}$)** of the board *after* a prospective move:
+
+$$P_{\text{survival}} = \frac{\text{Number of safe spawns (leaving } \ge 1 \text{ valid move)}}{\text{Total possible random spawns (every empty cell spawning a 2 or 4)}}$$
+
+* **Risk-Adjusted Penalty:** If a move has even a tiny $10\%$ chance of causing a sudden game-over on the next turn ($P_{\text{survival}} = 0.90$), the bot hits the move's score with a massive penalty:
+  $$\text{Penalty} = (1.0 - P_{\text{survival}}) \times 10^{16} = 0.1 \times 10^{16}$$
+* **Strategic Utility:** This weight acts as a defensive shield. The bot will gladly bypass a high-scoring merge if it carries a risk of trapping tiles, prioritizing keeping the board "breathable" (maintaining empty spaces and open directions) to survive tight scenarios.
+
+### 3. Neural Network Weights (The "Experience" Fine-Tuner)
+While hand-crafted heuristics are excellent, they cannot easily capture subtle patterns—such as the exact distribution of other tiles on the board. The **Neural Network** ($16$ inputs $\rightarrow$ $16$ hidden neurons $\rightarrow$ $1$ output) learns these complex, non-linear board relationships over time.
+
+* **Temporal Difference (TD) Learning:** As the bot trains, it evaluates board state $S$, plays a move to get a reward $R$ (normalized score gain) and next state $S'$. It calculates the target value:
+  $$\text{Target} = Reward + \gamma \cdot Value(S')$$
+* **Strategic Utility:** The network learns which board positions *actually* lead to high scores and long-term survival, adjusting the **synaptic weights** ($w_1, w_2$) via backpropagation. This learned score fine-tunes the heuristics, acting like a grandmaster's "intuition" to choose the path with the highest long-term probability of victory.
