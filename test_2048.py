@@ -232,6 +232,45 @@ Added Tile: 2 at (3, 2)
         mock_clear.assert_called_once()
         mock_print.assert_called_once()
 
+    def test_simulate_move(self):
+        grid = [
+            [2, 2, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+        ]
+        next_grid, changed, gain = game_module.simulate_move(grid, "a")
+        self.assertTrue(changed)
+        self.assertEqual(gain, 4)
+        self.assertEqual(next_grid[0], [4, 0, 0, 0])
+
+    def test_evaluate_grid(self):
+        corner_monotonic_grid = [
+            [2, 4, 8, 16],
+            [32, 64, 128, 256],
+            [512, 1024, 2048, 4096],
+            [8192, 16384, 32768, 65536]
+        ]
+        bad_grid = [
+            [65536, 32768, 16384, 8192],
+            [512, 1024, 2048, 4096],
+            [32, 64, 128, 256],
+            [2, 4, 8, 16]
+        ]
+        score_good = game_module.evaluate_grid(corner_monotonic_grid)
+        score_bad = game_module.evaluate_grid(bad_grid)
+        self.assertTrue(score_good > score_bad)
+
+    def test_expectimax_choice(self):
+        grid = [
+            [2, 4, 2, 4],
+            [4, 2, 4, 2],
+            [2, 4, 2, 4],
+            [4, 2, 4, 0]
+        ]
+        score = game_module.expectimax(grid, depth=2, is_player=True)
+        self.assertTrue(isinstance(score, (int, float)))
+
 
 if __name__ == "__main__":
     unittest.main()

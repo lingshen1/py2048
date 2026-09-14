@@ -820,7 +820,145 @@ def run_playback(frames):
                 pass
 
 
-def run_test_mode():
+def simulate_move(grid, direction):
+    temp_grid = [row[:] for row in grid]
+    
+    def slide_row_left(row):
+        new_row = [v for v in row if v != 0]
+        gain = 0
+        for i in range(len(new_row) - 1):
+            if new_row[i] != 0 and new_row[i] == new_row[i + 1]:
+                new_row[i] *= 2
+                gain += new_row[i]
+                new_row[i + 1] = 0
+        new_row = [v for v in new_row if v != 0]
+        new_row += [0] * (4 - len(new_row))
+        return new_row, gain
+
+    score_gain = 0
+    if direction == "a":
+        for i in range(4):
+            temp_grid[i], gain = slide_row_left(temp_grid[i])
+            score_gain += gain
+    elif direction == "d":
+        for i in range(4):
+            rev, gain = slide_row_left(temp_grid[i][::-1])
+            temp_grid[i] = rev[::-1]
+            score_gain += gain
+    elif direction == "w":
+        cols = [list(c) for c in zip(*temp_grid)]
+        for i in range(4):
+            cols[i], gain = slide_row_left(cols[i])
+            score_gain += gain
+        temp_grid = [list(c) for c in zip(*cols)]
+    elif direction == "s":
+        cols = [list(c) for c in zip(*temp_grid)]
+        for i in range(4):
+            rev, gain = slide_row_left(cols[i][::-1])
+            cols[i] = rev[::-1]
+            score_gain += gain
+        temp_grid = [list(c) for c in zip(*cols)]
+        
+    changed = (temp_grid != grid)
+    return temp_grid, changed, score_gain
+
+
+def evaluate_grid(grid):
+    W_MATRIX = [
+        [3,  2,  1,  0],
+        [4,  5,  6,  7],
+        [11, 10, 9,  8],
+        [12, 13, 14, 15]
+    ]
+    
+    monotonicity_score = 0
+    max_tile = 0
+    max_r, max_c = 0, 0
+    empty_cells = 0
+    
+    for r in range(4):
+        for c in range(4):
+            val = grid[r][c]
+            if val > max_tile:
+                max_tile = val
+                max_r, max_c = r, c
+            if val == 0:
+                empty_cells += 1
+            else:
+                power = math.log2(val)
+                weight = 4 ** W_MATRIX[r][c]
+                monotonicity_score += power * weight
+                
+    score = monotonicity_score
+    
+    if max_r == 3 and max_c == 3:
+        score += (4 ** 16) * math.log2(max_tile)
+    else:
+        score -= (4 ** 17) * math.log2(max_tile)
+        
+    bottom_row_full = all(grid[3][c] != 0 for c in range(4))
+    if bottom_row_full:
+        score += 4 ** 14
+    else:
+        empty_bottom = sum(1 for c in range(4) if grid[3][c] == 0)
+        score -= (4 ** 14) * empty_bottom
+        
+    smoothness = 0
+    for r in range(4):
+        for c in range(4):
+            if grid[r][c] != 0:
+                if c < 3 and grid[r][c] == grid[r][c+1]:
+                    smoothness += math.log2(grid[r][c]) * (4 ** W_MATRIX[r][c])
+                if r < 3 and grid[r][c] == grid[r+1][c]:
+                    smoothness += math.log2(grid[r][c]) * (4 ** W_MATRIX[r][c])
+    score += smoothness
+    
+    score += empty_cells * (4 ** 8)
+    return score
+
+
+def expectimax(grid, depth, is_player):
+    # Base case: depth reached or no empty cells/cannot move
+    empty_cells = [(r, c) for r in range(4) for c in range(4) if grid[r][c] == 0]
+    
+    # Simple check if player can move in grid
+    can_move = False
+    for d in ["s", "d", "a", "w"]:
+        _, changed, _ = simulate_move(grid, d)
+        if changed:
+            can_move = True
+            break
+            
+    if depth == 0 or (is_player and not can_move):
+        return evaluate_grid(grid)
+        
+    if is_player:
+        best_score = -float('inf')
+        for d in ["s", "d", "a", "w"]:
+            next_grid, changed, _ = simulate_move(grid, d)
+            if changed:
+                score = expectimax(next_grid, depth - 1, False)
+                if d in ["a", "w"]:
+                    score -= (4 ** 14)
+                best_score = max(best_score, score)
+        return best_score
+    else:
+        if not empty_cells:
+            return evaluate_grid(grid)
+            
+        total_score = 0
+        for r, c in empty_cells:
+            grid[r][c] = 2
+            score_2 = expectimax(grid, depth - 1, True)
+            grid[r][c] = 4
+            score_4 = expectimax(grid, depth - 1, True)
+            grid[r][c] = 0
+            total_score += 0.9 * score_2 + 0.1 * score_4
+            
+        return total_score / len(empty_cells)
+
+
+def run_random_test_mode():
     game = Game2048()
     game.auto_play = True
     
@@ -852,6 +990,58 @@ def run_test_mode():
                 if game.has_won:
                     game.won_announced = True
                 game.move(move)
+            else:
+                break
+                
+    check_and_save_leaderboard(game.score, game.recall_count)
+
+
+def run_strategic_test_mode():
+    game = Game2048()
+    game.auto_play = True
+    
+    with RawTerminal():
+        while True:
+            game.render()
+            
+            if not game.can_move():
+                console.print(
+                    "\n[bold red]💀 GAME OVER! No more valid moves.[/bold red]"
+                )
+                console.print(
+                    f"[bold yellow]Final Score: {game.score} | Best: {game.high_score}[/bold yellow]\n"
+                )
+                break
+                
+            key = get_key_nonblocking(0.1)
+            if key == "q":
+                console.print("\n[yellow]Auto-play stopped by user.[/yellow]\n")
+                break
+            elif key == "i":
+                game.inverted_mode = not game.inverted_mode
+            elif key in ["h", "?"]:
+                show_help_screen("test")
+                
+            empty_count = sum(1 for r in range(4) for c in range(4) if game.grid[r][c] == 0)
+            depth = 3 if empty_count < 6 else 2
+            
+            best_move = None
+            best_score = -float('inf')
+            
+            for d in ["s", "d", "a", "w"]:
+                next_grid, changed, _ = simulate_move(game.grid, d)
+                if changed:
+                    score = expectimax(next_grid, depth - 1, False)
+                    if d in ["a", "w"]:
+                        score -= (4 ** 14)
+                    if score > best_score:
+                        best_score = score
+                        best_move = d
+                        
+            if best_move is not None:
+                if game.has_won:
+                    game.won_announced = True
+                game.move(best_move)
             else:
                 break
                 
@@ -907,8 +1097,11 @@ def main():
                 if game is not None:
                     run_active_game(game)
         return
-    elif len(sys.argv) > 1 and sys.argv[1] in ["-t", "--test"]:
-        run_test_mode()
+    elif len(sys.argv) > 1 and sys.argv[1] in ["-t1", "--test1"]:
+        run_random_test_mode()
+        return
+    elif len(sys.argv) > 1 and sys.argv[1] in ["-t2", "--test2", "-t", "--test"]:
+        run_strategic_test_mode()
         return
 
     game = Game2048()
