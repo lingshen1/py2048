@@ -315,6 +315,35 @@ Added Tile: 2 at (3, 2)
         score = game_module.expectimax_t3(grid, depth=2, is_player=True)
         self.assertTrue(isinstance(score, (int, float)))
 
+    @patch("2048.Game2048.render")
+    @patch("select.select")
+    @patch("socket.socket")
+    @patch("sys.stdin")
+    def test_udp_server_commands(self, mock_stdin, mock_socket_cls, mock_select, mock_render):
+        mock_socket = MagicMock()
+        mock_socket_cls.return_value = mock_socket
+        
+        mock_select.side_effect = [
+            ([mock_socket], [], []),
+            ([sys.stdin], [], [])
+        ]
+        
+        mock_socket.recvfrom.return_value = (b"w", ("127.0.0.1", 12345))
+        mock_stdin.read.return_value = "q"
+        
+        with patch("time.sleep"):
+            game_module.run_udp_server(port=10005)
+            
+        mock_socket.bind.assert_called_with(("0.0.0.0", 10005))
+        mock_socket.close.assert_called_once()
+        mock_socket.sendto.assert_called_once()
+        sent_data, addr = mock_socket.sendto.call_args[0]
+        self.assertEqual(addr, ("127.0.0.1", 12345))
+        
+        state = json.loads(sent_data.decode("utf-8"))
+        self.assertIn("grid", state)
+        self.assertIn("score", state)
+
 
 if __name__ == "__main__":
     unittest.main()

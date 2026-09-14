@@ -4,6 +4,7 @@ import math
 import os
 import random
 import select
+import socket
 import sys
 import time
 from rich.console import Console
@@ -1230,6 +1231,86 @@ def run_predictive_test_mode():
     check_and_save_leaderboard(game.score, game.recall_count)
 
 
+def run_udp_server(port=10000):
+    game = Game2048()
+    
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        server_socket.bind(("0.0.0.0", port))
+    except Exception as e:
+        console.print(f"[red]Error binding UDP socket to port {port}: {e}[/red]")
+        return
+        
+    console.print(f"[green]UDP Server listening on 0.0.0.0:{port}...[/green]")
+    console.print("[dim]Press [Q] on keyboard to stop server.[/dim]")
+    time.sleep(1.0)
+    
+    with RawTerminal():
+        while True:
+            game.render()
+            
+            game_over = not game.can_move()
+            if game_over:
+                console.print("\n[bold red]💀 GAME OVER! No more valid moves.[/bold red]\n")
+                
+            rlist, _, _ = select.select([sys.stdin, server_socket], [], [])
+            
+            for source in rlist:
+                if source == sys.stdin:
+                    key = sys.stdin.read(1)
+                    if key.lower() == "q":
+                        console.print("\n[yellow]UDP Server stopped by user.[/yellow]\n")
+                        server_socket.close()
+                        return
+                    elif key.lower() == "i":
+                        game.inverted_mode = not game.inverted_mode
+                elif source == server_socket:
+                    data, addr = server_socket.recvfrom(1024)
+                    msg = data.decode("utf-8").strip().lower()
+                    
+                    if msg in ["w", "up"]:
+                        if not game_over:
+                            if game.has_won:
+                                game.won_announced = True
+                            game.move("w")
+                    elif msg in ["s", "down"]:
+                        if not game_over:
+                            if game.has_won:
+                                game.won_announced = True
+                            game.move("s")
+                    elif msg in ["a", "left"]:
+                        if not game_over:
+                            if game.has_won:
+                                game.won_announced = True
+                            game.move("a")
+                    elif msg in ["d", "right"]:
+                        if not game_over:
+                            if game.has_won:
+                                game.won_announced = True
+                            game.move("d")
+                    elif msg in ["r", "undo"]:
+                        game.recall_step()
+                    elif msg in ["i", "invert"]:
+                        game.inverted_mode = not game.inverted_mode
+                    elif msg in ["q", "quit"]:
+                        console.print(f"\n[yellow]UDP Client {addr} requested quit.[/yellow]\n")
+                        server_socket.close()
+                        return
+                        
+                    reply = {
+                        "grid": game.grid,
+                        "score": game.score,
+                        "high_score": game.high_score,
+                        "has_won": game.has_won,
+                        "game_over": not game.can_move(),
+                        "recall_count": game.recall_count
+                    }
+                    try:
+                        server_socket.sendto(json.dumps(reply).encode("utf-8"), addr)
+                    except Exception:
+                        pass
+
+
 def run_active_game(game):
     aborted = False
     with RawTerminal():
@@ -1270,7 +1351,17 @@ def run_active_game(game):
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] in ["-p", "--playback"]:
+    if "-s" in sys.argv or "--server" in sys.argv:
+        port = 10000
+        idx = sys.argv.index("-s") if "-s" in sys.argv else sys.argv.index("--server")
+        if idx + 1 < len(sys.argv):
+            try:
+                port = int(sys.argv[idx + 1])
+            except ValueError:
+                console.print(f"[yellow]Invalid port number '{sys.argv[idx + 1]}'. Using default 10000.[/yellow]")
+        run_udp_server(port)
+        return
+    elif len(sys.argv) > 1 and sys.argv[1] in ["-p", "--playback"]:
         log_file = list_and_select_log()
         if log_file:
             frames = parse_log_file(log_file)
