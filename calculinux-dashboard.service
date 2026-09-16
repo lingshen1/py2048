@@ -1,6 +1,7 @@
 [Unit]
 Description=Calculinux Graphical Dashboard Launcher
 After=network.target bluez-alsa.service
+Conflicts=getty@tty1.service
 DefaultDependencies=no
 
 [Service]

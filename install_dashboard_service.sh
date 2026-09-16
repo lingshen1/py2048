@@ -17,6 +17,13 @@ if [ -d "$CP_DIR" ]; then
     # Enable the service to run on boot
     systemctl enable calculinux-dashboard.service
     echo "3. Enabled calculinux-dashboard.service on boot!"
+    
+    # Disable, stop, and mask competing getty login service on tty1
+    systemctl stop getty@tty1.service 2>/dev/null
+    systemctl disable getty@tty1.service 2>/dev/null
+    systemctl mask getty@tty1.service 2>/dev/null
+    echo "4. Stopped and masked competing getty login prompt service on tty1!"
+    
     echo "------------------------------------------------"
     echo "Installation complete! The dashboard will start automatically on boot."
     echo "To start it now, run: systemctl start calculinux-dashboard.service"
