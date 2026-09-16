@@ -1672,7 +1672,11 @@ def run_udp_server(port=10000):
             for source in rlist:
                 if source == sys.stdin:
                     key = get_key()
-                    if key == "q":
+                    if key == "":
+                        console.print("\n[yellow]EOF detected on stdin. Stopping server...[/yellow]\n")
+                        server_socket.close()
+                        return
+                    elif key == "q":
                         console.print("\n[yellow]UDP Server stopped by user.[/yellow]\n")
                         server_socket.close()
                         return
