@@ -6,6 +6,7 @@ import os
 import random
 import select
 import socket
+import subprocess
 import sys
 import time
 from rich.console import Console
@@ -761,7 +762,137 @@ def play_fireworks_video(text="NEW HIGH SCORE!"):
         time.sleep(0.08)
 
 
-def check_and_save_leaderboard(score, recalls):
+def is_sound_driver_detected():
+    if os.path.exists("/proc/asound/cards"):
+        try:
+            with open("/proc/asound/cards", "r") as f:
+                content = f.read().strip()
+                if content and "no soundcards" not in content.lower():
+                    return True
+        except Exception:
+            pass
+            
+    if os.path.exists("/dev/snd"):
+        try:
+            if os.listdir("/dev/snd"):
+                return True
+        except Exception:
+            pass
+            
+    return False
+
+
+def play_conquering_hero_song():
+    if not is_sound_driver_detected():
+        return
+        
+    sample_rate = 8000
+    wave = bytearray()
+    
+    # G5=784, F#5=740, A5=880, D5=587, B5=988, C6=1047
+    melody = [
+        (784, 0.4), (740, 0.2), (784, 0.2), (880, 0.4), (784, 0.2), (740, 0.2), (784, 0.4), (587, 0.4),
+        (0, 0.1),
+        (988, 0.4), (880, 0.2), (988, 0.2), (1047, 0.4), (988, 0.2), (880, 0.2), (988, 0.4), (784, 0.4)
+    ]
+    
+    for freq, duration in melody:
+        num_samples = int(sample_rate * duration)
+        if freq == 0:
+            wave.extend([127] * num_samples)
+        else:
+            for i in range(num_samples):
+                t = i / sample_rate
+                val = int(127 + 120 * math.sin(2 * math.pi * freq * t))
+                wave.append(val)
+                
+    try:
+        p = subprocess.Popen(
+            ["aplay", "-q", "-t", "raw", "-r", "8000", "-f", "U8"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        p.stdin.write(bytes(wave))
+        p.stdin.flush()
+        p.stdin.close()
+    except Exception:
+        pass
+
+
+def play_graphical_fireworks_video(display, text="NEW HIGH SCORE!"):
+    width = display.width
+    height = display.height
+    
+    colors = [
+        (255, 0, 0), (0, 255, 0), (255, 215, 0), (0, 255, 255), (255, 0, 255),
+        (255, 255, 255), (255, 127, 0), (127, 255, 0), (0, 127, 255)
+    ]
+    
+    fireworks = [
+        {"cx": width // 3, "cy": height - 10, "tx": width // 3, "ty": height // 3, "color": (255, 0, 0), "particles": [], "state": "launch"},
+        {"cx": (2 * width) // 3, "cy": height - 10, "tx": (2 * width) // 3, "ty": height // 4, "color": (0, 255, 0), "particles": [], "state": "launch"}
+    ]
+    
+    play_conquering_hero_song()
+    
+    for frame in range(45):
+        display.clear(20, 20, 20)
+        
+        for fw in fireworks:
+            if fw["state"] == "launch":
+                if fw["cy"] > fw["ty"]:
+                    fw["cy"] -= 6
+                    display.draw_rect(fw["cx"] - 1, fw["cy"] - 1, 3, 6, *fw["color"])
+                else:
+                    fw["state"] = "explode"
+                    num_particles = 12
+                    for i in range(num_particles):
+                        angle = (i * 2 * math.pi) / num_particles
+                        speed = random.uniform(2.0, 4.5)
+                        fw["particles"].append({
+                            "x": float(fw["cx"]),
+                            "y": float(fw["cy"]),
+                            "vx": math.cos(angle) * speed,
+                            "vy": math.sin(angle) * speed,
+                        })
+            elif fw["state"] == "explode":
+                alive = False
+                for p in fw["particles"]:
+                    p["x"] += p["vx"]
+                    p["y"] += p["vy"]
+                    p["vy"] += 0.25
+                    
+                    px = int(round(p["x"]))
+                    py = int(round(p["y"]))
+                    
+                    if 0 <= px < width and 0 <= py < height:
+                        display.draw_rect(px - 1, py - 1, 3, 3, *fw["color"])
+                        alive = True
+                        
+                if not alive and frame < 30:
+                    fw["state"] = "launch"
+                    fw["cx"] = random.randint(30, width - 30)
+                    fw["cy"] = height - 10
+                    fw["tx"] = fw["cx"]
+                    fw["ty"] = random.randint(30, height // 2)
+                    fw["color"] = random.choice(colors)
+                    fw["particles"] = []
+                    
+        text_len = len(text)
+        text_w = text_len * 16
+        text_x = (width - text_w) // 2
+        text_y = height // 2 - 10
+        
+        tx_color = colors[frame % len(colors)]
+        display.draw_rect(text_x - 10, text_y - 8, text_w + 20, 28, 10, 10, 10)
+        display.draw_string(text, text_x, text_y, 2, *tx_color)
+        
+        display.flush()
+        time.sleep(0.08)
+
+
+def check_and_save_leaderboard(score, recalls, game=None):
     scores, historical_best = load_leaderboard()
     
     is_qualifying = False
@@ -777,8 +908,12 @@ def check_and_save_leaderboard(score, recalls):
         is_all_time_best = (score > all_time_best) or (not scores and score > 0)
         
         text_video = "ALL-TIME HIGH SCORE!" if is_all_time_best else "NEW LEADERBOARD SCORE!"
-        play_fireworks_video(text_video)
         
+        if game is not None and hasattr(game, "fb_display") and game.fb_display:
+            play_graphical_fireworks_video(game.fb_display, text_video)
+        else:
+            play_fireworks_video(text_video)
+            
         console.print("\n[bold yellow]🏆 YOU ACHIEVED A LEADERBOARD HIGH SCORE! 🏆[/bold yellow]")
         try:
             player_name = input("Enter your name (max 15 chars): ").strip()
@@ -1260,7 +1395,7 @@ def run_random_test_mode():
             else:
                 break
                 
-    check_and_save_leaderboard(game.score, game.recall_count)
+    check_and_save_leaderboard(game.score, game.recall_count, game)
 
 
 def run_strategic_test_mode():
@@ -1312,7 +1447,7 @@ def run_strategic_test_mode():
             else:
                 break
                 
-    check_and_save_leaderboard(game.score, game.recall_count)
+    check_and_save_leaderboard(game.score, game.recall_count, game)
 
 
 def calculate_survival_probability(grid):
@@ -1494,7 +1629,7 @@ def run_predictive_test_mode():
             else:
                 break
                 
-    check_and_save_leaderboard(game.score, game.recall_count)
+    check_and_save_leaderboard(game.score, game.recall_count, game)
 
 
 def run_udp_server(port=10000):
@@ -1616,7 +1751,7 @@ def run_active_game(game):
                 game.move(key)
 
     if not aborted:
-        check_and_save_leaderboard(game.score, game.recall_count)
+        check_and_save_leaderboard(game.score, game.recall_count, game)
 
 
 def main():

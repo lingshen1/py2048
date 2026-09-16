@@ -111,15 +111,18 @@ Game2048.from_state(grid, score, history_frames)
 ```
 This restores the exact visual board, score, and populates the undo history list with preceding steps—allowing players to undo moves that happened *before* they took control of the log!
 
-### 4. Top-20 High Scores & Celebrations
-The high score persistence handles JSON arrays gracefully. When the game ends, it checks if the player's score qualifies for the top 20. If so:
+### 4. Top-20 High Scores, Graphical Video & Audio Celebrations
+The high score persistence handles JSON leaderboard arrays gracefully. When the game ends, it checks if the player's score qualifies for the top 20. If so:
 1. It suspends RawTerminal mode.
-2. Runs `play_fireworks_video()`, generating floating ASCII particles utilizing simple vector mathematics and gravity simulation:
-   * Particle position: $X_{new} = X + V_x$, $Y_{new} = Y + V_y$
-   * Gravity factor: $V_{y, new} = V_y + 0.08$
-3. Prompts the user for their name via standard `input()`.
-4. Saves the details (name, score, recalls used, localized timestamp) into `high_scores.json`.
-5. Prints a beautifully formatted Rich table.
+2. Plays a dynamic, colorful celebration video:
+   * **In Text Mode**: Runs `play_fireworks_video()`, generating floating ASCII particles using simple vector mathematics and gravity simulation:
+     * Particle position: $X_{new} = X + V_x$, $Y_{new} = Y + V_y$
+     * Gravity factor: $V_{y, new} = V_y + 0.08$
+   * **In Graphical Mode (`-g`)**: Runs `play_graphical_fireworks_video()`, generating floating, full-color dynamic pixel fireworks directly on the `/dev/fb0` framebuffer backbuffer and flushing it smoothly.
+3. **Adaptive Audio Melodies**: If an active sound driver or ALSA device (like onboard audio, connected USB card, or a paired Bluetooth headset) is detected, the game mathematically synthesizes George Frideric Handel's famous *"See, the conqu'ring hero comes!"* victory chorus in pure Python (8-bit, 8kHz mono raw PCM) and pipes it directly to `aplay` in the background in perfect sync with the fireworks!
+4. Prompts the user for their name via standard `input()`.
+5. Saves the details (name, score, recalls used, localized timestamp) into `high_scores.json`.
+6. Prints a beautifully formatted Rich table.
 
 ### 5. Non-Blocking Event Replay Loop
 To allow keyboard navigation (pausing, speeding up, changing options) during live playback or automated bot runs, the engine implements a portable, non-blocking input wrapper utilizing `select.select()` to poll standard input:
