@@ -242,6 +242,7 @@ def show_help_screen(context="game"):
         
     panel = Panel(
         table,
+        title="[bold gold1] 2048 Game Help v3.0.0 [/bold gold1] | Author: [bold cyan]Ling Shen[/bold cyan]",
         subtitle="[bold yellow]Press any key to close help and return...[/bold yellow]",
         expand=False
     )

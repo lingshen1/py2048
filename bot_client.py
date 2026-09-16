@@ -384,7 +384,8 @@ def play_game(sock, server_addr, net, train_mode=False):
 
 def show_help():
     print("""
-2048 Trainable Neural Network Bot Client
+2048 Trainable Neural Network Bot Client v3.0.0
+Author: Ling Shen
 
 Usage:
   python3 bot_client.py [options]

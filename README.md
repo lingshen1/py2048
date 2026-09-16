@@ -1,5 +1,8 @@
 # CLI 2048 for Embedded Linux (Luckfox)
 
+**Version:** `v3.0.0`  
+**Author:** `Ling Shen`  
+
 A lightweight, terminal-based implementation of the classic 2048 game built specifically for embedded Linux systems (like Luckfox Lyra) running stripped-down Python environments.
 
 Now upgraded with game logging, interactive playback, step-jumping, active state takeover (grabbing control), step recall/undo, a persistent top-20 leaderboard, custom ASCII particle fireworks celebrations, and an auto-playing AI bot!
