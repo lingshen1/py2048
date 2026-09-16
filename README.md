@@ -270,3 +270,35 @@ While hand-crafted heuristics are excellent, they cannot easily capture subtle p
 * **Temporal Difference (TD) Learning:** As the bot trains, it evaluates board state $S$, plays a move to get a reward $R$ (normalized score gain) and next state $S'$. It calculates the target value:
   $$\text{Target} = Reward + \gamma \cdot Value(S')$$
 * **Strategic Utility:** The network learns which board positions *actually* lead to high scores and long-term survival, adjusting the **synaptic weights** ($w_1, w_2$) via backpropagation. This learned score fine-tunes the heuristics, acting like a grandmaster's "intuition" to choose the path with the highest long-term probability of victory.
+
+---
+
+## Standalone Reversi (Othello) Game (`reversi.py`)
+
+In addition to 2048, a fully featured **Reversi (Othello)** game is available as a standalone executable (`reversi.py`).
+
+### Key Features
+* **Double-Buffered Framebuffer Graphics (`-g` / `--graph`):** Renders a classic "green felt table" with circular Black and White discs, a yellow selector cursor, and live scorecard overlays directly on `/dev/fb0`. It automatically detects display boundaries (adapting layouts dynamically to `240x240` or `320x320`).
+* **Interactive Local Terminal Fallback:** Renders a gorgeous, high-contrast, fully playable 8x8 text matrix on standard console windows using Rich.
+* **Keyboard-Controlled Cursor:** Navigate using **WASD or Arrow Keys** and place discs using **Space or Enter**.
+* **George Frideric Händel Victory Audio:** If an active ALSA driver is detected, plays Händel's famous victory chorus *"See, the conqu'ring hero comes!"* in raw 8-bit U8 PCM in the background.
+
+### Master-Level AI Bot Heuristics
+The Othello AI uses a depth-3/4 Minimax Search with Alpha-Beta Pruning, guided by a multi-phase evaluation function implementing expert game-theory:
+1. **Positional Matrix weights:** Scores cells based on strategic values—corners are highly rewarded (`+100`), edges valued (`+10`), and dangerous X/C-squares heavily penalized (`-30` / `-15`).
+2. **Dynamic Corner Locking:** C-squares and X-squares penalties are only active if their adjacent corner is empty. If the bot locks a corner, it safely utilizes adjacent squares as non-flippable anchors.
+3. **Mobility Minimization:** Calculates legal move outcomes, aggressively picking paths that restrict the number of moves available to the opponent (forcing them into disadvantageous positions).
+4. **Delayed Maximization (Phased Evaluation):**
+   * **Opening & Midgame (< 50 discs):** Heavily penalizes taking too many friendly discs (focusing entirely on quiet moves, board position, and mobility).
+   * **Endgame (>= 50 discs):** Shifts completely to maximizing final disc captures to secure victory.
+
+### How to Run Reversi
+
+* **To play on standard console terminal**:
+  ```bash
+  python3 reversi.py
+  ```
+* **To play with raw framebuffer graphics on Calculinux**:
+  ```bash
+  python3 reversi.py -g
+  ```
