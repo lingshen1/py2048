@@ -1658,13 +1658,22 @@ def run_udp_server(port=10000):
             
             for source in rlist:
                 if source == sys.stdin:
-                    key = sys.stdin.read(1)
-                    if key.lower() == "q":
+                    key = get_key()
+                    if key == "q":
                         console.print("\n[yellow]UDP Server stopped by user.[/yellow]\n")
                         server_socket.close()
                         return
-                    elif key.lower() == "i":
+                    elif key == "i":
                         game.inverted_mode = not game.inverted_mode
+                    elif key == "r":
+                        game.recall_step()
+                    elif key in ["h", "?"]:
+                        show_help_screen("game")
+                    elif key in ["w", "a", "s", "d"]:
+                        if not game_over:
+                            if game.has_won:
+                                game.won_announced = True
+                            game.move(key)
                 elif source == server_socket:
                     data, addr = server_socket.recvfrom(1024)
                     msg = data.decode("utf-8").strip().lower()
