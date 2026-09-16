@@ -1,6 +1,7 @@
 import datetime
 import json
 import math
+import mmap
 import os
 import random
 import select
@@ -46,6 +47,120 @@ BG_TILE_STYLES = {
     1024: "bold white on bright_red",
     2048: "bold white on bright_magenta",
 }
+
+
+BITMAP_FONT = {
+    '0': [0x3C, 0x66, 0x6E, 0x7E, 0x76, 0x66, 0x3C, 0x00],
+    '1': [0x18, 0x38, 0x18, 0x18, 0x18, 0x18, 0x3C, 0x00],
+    '2': [0x3C, 0x66, 0x06, 0x0C, 0x18, 0x30, 0x7E, 0x00],
+    '3': [0x3C, 0x66, 0x06, 0x1C, 0x06, 0x66, 0x3C, 0x00],
+    '4': [0x0C, 0x1C, 0x3C, 0x6C, 0x7E, 0x0C, 0x0C, 0x00],
+    '5': [0x7E, 0x60, 0x7C, 0x06, 0x06, 0x66, 0x3C, 0x00],
+    '6': [0x1C, 0x30, 0x60, 0x7C, 0x66, 0x66, 0x3C, 0x00],
+    '7': [0x7E, 0x06, 0x0C, 0x18, 0x30, 0x30, 0x30, 0x00],
+    '8': [0x3C, 0x66, 0x66, 0x3C, 0x66, 0x66, 0x3C, 0x00],
+    '9': [0x3C, 0x66, 0x66, 0x3E, 0x06, 0x0C, 0x38, 0x00],
+    's': [0x3E, 0x60, 0x7C, 0x06, 0x06, 0x66, 0x3C, 0x00],
+    'c': [0x3C, 0x66, 0x60, 0x60, 0x60, 0x66, 0x3C, 0x00],
+    'o': [0x3C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x00],
+    'r': [0x7C, 0x66, 0x66, 0x7C, 0x78, 0x6C, 0x66, 0x00],
+    'e': [0x7E, 0x60, 0x7C, 0x60, 0x60, 0x60, 0x7E, 0x00],
+    'b': [0x7C, 0x66, 0x66, 0x7C, 0x66, 0x66, 0x7C, 0x00],
+    't': [0x7E, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00],
+    'g': [0x3E, 0x66, 0x60, 0x6E, 0x66, 0x66, 0x3E, 0x00],
+    'a': [0x3C, 0x66, 0x66, 0x7E, 0x66, 0x66, 0x66, 0x00],
+    'm': [0x66, 0x7E, 0x66, 0x66, 0x66, 0x66, 0x66, 0x00],
+    'v': [0x66, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x18, 0x00],
+    'p': [0x7C, 0x66, 0x66, 0x7C, 0x60, 0x60, 0x60, 0x00],
+    'l': [0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x7E, 0x00],
+    'y': [0x66, 0x66, 0x66, 0x3C, 0x18, 0x18, 0x18, 0x00],
+    'n': [0x66, 0x6E, 0x7E, 0x76, 0x66, 0x66, 0x66, 0x00],
+    'w': [0x66, 0x66, 0x66, 0x66, 0x7E, 0x7E, 0x66, 0x00],
+    'i': [0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00],
+    'u': [0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x00],
+    'd': [0x78, 0x6C, 0x66, 0x66, 0x66, 0x6C, 0x78, 0x00],
+    ' ': [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+    '-': [0x00, 0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0x00],
+    ':': [0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x00, 0x00],
+    '!': [0x18, 0x18, 0x18, 0x18, 0x18, 0x00, 0x18, 0x00],
+}
+
+
+class FramebufferDisplay:
+    def __init__(self):
+        self.width = 320
+        self.height = 320
+        self.bpp = 4
+        self.fb_file = None
+        self.fb_map = None
+        
+        try:
+            self.fb_file = open("/dev/fb0", "r+b")
+            try:
+                self.fb_map = mmap.mmap(self.fb_file.fileno(), 320 * 320 * 4)
+                self.bpp = 4
+            except (ValueError, OSError):
+                self.fb_map = mmap.mmap(self.fb_file.fileno(), 320 * 320 * 2)
+                self.bpp = 2
+            self.backbuffer = bytearray(320 * 320 * self.bpp)
+        except Exception as e:
+            raise RuntimeError(f"Cannot initialize /dev/fb0: {e}")
+
+    def get_pixel_color(self, r, g, b):
+        if self.bpp == 4:
+            return bytes([b, g, r, 0])
+        else:
+            r5 = (r >> 3) & 0x1F
+            g6 = (g >> 2) & 0x3F
+            b5 = (b >> 3) & 0x1F
+            val = (r5 << 11) | (g6 << 5) | b5
+            return bytes([val & 0xFF, (val >> 8) & 0xFF])
+
+    def clear(self, r, g, b):
+        color_bytes = self.get_pixel_color(r, g, b)
+        self.backbuffer = bytearray(color_bytes * (self.width * self.height))
+
+    def draw_rect(self, x, y, w, h, r, g, b):
+        color_bytes = self.get_pixel_color(r, g, b)
+        for dy in range(h):
+            cy = y + dy
+            if 0 <= cy < self.height:
+                start_x = max(0, x)
+                end_x = min(self.width, x + w)
+                if start_x < end_x:
+                    idx_start = (cy * self.width + start_x) * self.bpp
+                    idx_end = (cy * self.width + end_x) * self.bpp
+                    self.backbuffer[idx_start:idx_end] = color_bytes * (end_x - start_x)
+
+    def draw_char(self, char, x, y, scale, r, g, b):
+        bitmap = BITMAP_FONT.get(char.lower(), BITMAP_FONT[' '])
+        for row_idx, row_byte in enumerate(bitmap):
+            for col_idx in range(8):
+                if (row_byte >> (7 - col_idx)) & 1:
+                    self.draw_rect(
+                        x + col_idx * scale,
+                        y + row_idx * scale,
+                        scale,
+                        scale,
+                        r, g, b
+                    )
+
+    def draw_string(self, text, x, y, scale, r, g, b):
+        cx = x
+        for char in text:
+            self.draw_char(char, cx, y, scale, r, g, b)
+            cx += 8 * scale
+
+    def flush(self):
+        if self.fb_map:
+            self.fb_map.seek(0)
+            self.fb_map.write(self.backbuffer)
+
+    def close(self):
+        if self.fb_map:
+            self.fb_map.close()
+        if self.fb_file:
+            self.fb_file.close()
 
 
 class RawTerminal:
@@ -127,6 +242,14 @@ class Game2048:
         self.has_won = False
         self.won_announced = False
         self.inverted_mode = False  # Default: Clear text on default background
+        
+        # Check for graphical framebuffer flag
+        self.fb_display = None
+        if "-g" in sys.argv or "--graph" in sys.argv:
+            try:
+                self.fb_display = FramebufferDisplay()
+            except Exception as e:
+                console.print(f"[yellow]Failed to load graphical framebuffer display: {e}[/yellow]")
         
         # History and stats tracking
         self.history = []
@@ -282,7 +405,82 @@ class Game2048:
         ):
             self.has_won = True
 
+    def __del__(self):
+        if hasattr(self, "fb_display") and self.fb_display:
+            self.fb_display.close()
+
+    def render_graphical(self):
+        if not self.fb_display:
+            return
+            
+        self.fb_display.clear(30, 30, 30)
+        
+        self.fb_display.draw_string("SCORE:", 15, 12, 1, 255, 215, 0)
+        self.fb_display.draw_string(str(self.score), 15, 24, 2, 255, 255, 255)
+        
+        self.fb_display.draw_string("BEST:", 185, 12, 1, 255, 215, 0)
+        self.fb_display.draw_string(str(max(self.score, self.high_score)), 185, 24, 2, 255, 255, 255)
+        
+        self.fb_display.draw_rect(40, 65, 240, 240, 60, 60, 60)
+        
+        cell_size = 50
+        padding = 8
+        
+        TILE_COLORS = {
+            0: (100, 100, 100),
+            2: (238, 228, 218),
+            4: (237, 224, 200),
+            8: (242, 177, 121),
+            16: (245, 149, 99),
+            32: (246, 124, 95),
+            64: (246, 94, 59),
+            128: (237, 207, 114),
+            256: (237, 204, 97),
+            512: (237, 200, 80),
+            1024: (237, 197, 63),
+            2048: (237, 194, 46)
+        }
+        
+        for r in range(4):
+            for c in range(4):
+                val = self.grid[r][c]
+                cell_x = 48 + c * 58
+                cell_y = 73 + r * 58
+                
+                bg_color = TILE_COLORS.get(val, (60, 60, 60))
+                self.fb_display.draw_rect(cell_x, cell_y, cell_size, cell_size, *bg_color)
+                
+                if val > 0:
+                    val_str = str(val)
+                    num_digits = len(val_str)
+                    tx_color = (119, 110, 101) if val in [2, 4] else (255, 255, 255)
+                    
+                    if num_digits == 1:
+                        scale = 2
+                        tx_x = cell_x + 17
+                        tx_y = cell_y + 17
+                    elif num_digits == 2:
+                        scale = 2
+                        tx_x = cell_x + 9
+                        tx_y = cell_y + 17
+                    elif num_digits == 3:
+                        scale = 1
+                        tx_x = cell_x + 13
+                        tx_y = cell_y + 21
+                    else:
+                        scale = 1
+                        tx_x = cell_x + 9
+                        tx_y = cell_y + 21
+                        
+                    self.fb_display.draw_string(val_str, tx_x, tx_y, scale, *tx_color)
+                    
+        self.fb_display.flush()
+
     def render(self):
+        if self.fb_display:
+            self.render_graphical()
+            return
+            
         console.clear()
         table = Table(
             show_header=False,

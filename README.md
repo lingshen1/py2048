@@ -19,6 +19,7 @@ Now upgraded with game logging, interactive playback, step-jumping, active state
 * **Top-20 Leaderboard:** Stores up to 20 top records in `high_scores.json` detailing Player Name, Score, Recalls, and Timestamp.
 * **ASCII Fireworks "Video":** Plays a physics-based, gravity-simulated particle fireworks show in flashing console colors whenever a leaderboard high score is achieved.
 * **Global Contextual Help Overlay (`H`/`?`):** Instantly displays a modal help screen tailored to your current mode (Active Play, Playback, or Bot Mode).
+* **Calculinux Framebuffer Graphics Display (`-g`):** Auto-detects the Calculinux 320x320 display and draws high-performance, double-buffered full-color graphics directly onto `/dev/fb0` using a custom pixel-art font and native colors. Can be combined with other modes (e.g. Server, Playback, or Bot Mode).
 
 ---
 
@@ -39,6 +40,7 @@ Now upgraded with game logging, interactive playback, step-jumping, active state
 | **`python3 2048.py -t2`** or **`--test2`** | Launch the Strategic AI Bot (Expectimax corner-locking AI) |
 | **`python3 2048.py -t3`** or **`--test3`** (or **`-t`**) | Launch the Predictive AI Bot (Predictive Grandmaster AI with Survival Weighting) |
 | **`python3 2048.py -s [port]`** or **`--server [port]`** | Start UDP Server Mode (default port 10000) for external network play |
+| **`-g`** or **`--graph`** | *(Append to any command)* Enable raw framebuffer full-color graphical display on Calculinux (/dev/fb0) |
 
 ---
 

@@ -369,6 +369,24 @@ Added Tile: 2 at (3, 2)
         self.assertEqual(gain, 4)
         self.assertEqual(next_grid[0], [4, 0, 0, 0])
 
+    @patch("mmap.mmap")
+    @patch("builtins.open")
+    def test_graphical_rendering_flow(self, mock_open, mock_mmap_cls):
+        mock_map = MagicMock()
+        mock_mmap_cls.return_value = mock_map
+        
+        fb_display = game_module.FramebufferDisplay()
+        
+        fb_display.clear(30, 30, 30)
+        self.assertEqual(len(fb_display.backbuffer), 320 * 320 * 4)
+        
+        fb_display.draw_rect(10, 10, 50, 50, 255, 0, 0)
+        fb_display.draw_string("123", 20, 20, scale=2, r=255, g=255, b=255)
+        
+        fb_display.flush()
+        mock_map.seek.assert_called_with(0)
+        mock_map.write.assert_called_with(fb_display.backbuffer)
+
 
 if __name__ == "__main__":
     unittest.main()
