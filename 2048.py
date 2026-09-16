@@ -88,21 +88,37 @@ BITMAP_FONT = {
 
 class FramebufferDisplay:
     def __init__(self):
+        # Default fallback values
         self.width = 320
         self.height = 320
         self.bpp = 4
+        self.size_bytes = 320 * 320 * 4
         self.fb_file = None
         self.fb_map = None
         
+        # Query sysfs values for accurate hardware setup
+        try:
+            if os.path.exists("/sys/class/graphics/fb0/virtual_size"):
+                with open("/sys/class/graphics/fb0/virtual_size", "r") as f:
+                    w_str, h_str = f.read().strip().split(",")
+                    self.width = int(w_str)
+                    self.height = int(h_str)
+            if os.path.exists("/sys/class/graphics/fb0/bits_per_pixel"):
+                with open("/sys/class/graphics/fb0/bits_per_pixel", "r") as f:
+                    bpp_bits = int(f.read().strip())
+                    self.bpp = bpp_bits // 8
+            if os.path.exists("/sys/class/graphics/fb0/size"):
+                with open("/sys/class/graphics/fb0/size", "r") as f:
+                    self.size_bytes = int(f.read().strip())
+            else:
+                self.size_bytes = self.width * self.height * self.bpp
+        except Exception:
+            pass
+            
         try:
             self.fb_file = open("/dev/fb0", "r+b")
-            try:
-                self.fb_map = mmap.mmap(self.fb_file.fileno(), 320 * 320 * 4)
-                self.bpp = 4
-            except (ValueError, OSError):
-                self.fb_map = mmap.mmap(self.fb_file.fileno(), 320 * 320 * 2)
-                self.bpp = 2
-            self.backbuffer = bytearray(320 * 320 * self.bpp)
+            self.fb_map = mmap.mmap(self.fb_file.fileno(), self.size_bytes)
+            self.backbuffer = bytearray(self.size_bytes)
         except Exception as e:
             raise RuntimeError(f"Cannot initialize /dev/fb0: {e}")
 
@@ -413,18 +429,54 @@ class Game2048:
         if not self.fb_display:
             return
             
+        width = self.fb_display.width
+        height = self.fb_display.height
+        
         self.fb_display.clear(30, 30, 30)
         
-        self.fb_display.draw_string("SCORE:", 15, 12, 1, 255, 215, 0)
-        self.fb_display.draw_string(str(self.score), 15, 24, 2, 255, 255, 255)
+        # Decide scaling parameters dynamically based on actual screen size
+        if width >= 320 and height >= 320:
+            grid_w = 240
+            grid_h = 240
+            grid_x = (width - grid_w) // 2
+            grid_y = 65
+            
+            cell_size = 50
+            cell_step = 58
+            cell_offset = 8
+            
+            font_scale_score = 1
+            font_scale_val = 2
+            
+            score_y1 = 12
+            score_y2 = 24
+            best_x = 185
+        else:
+            grid_w = 180
+            grid_h = 180
+            grid_x = (width - grid_w) // 2
+            grid_y = 48
+            
+            cell_size = 36
+            cell_step = 44
+            cell_offset = 6
+            
+            font_scale_score = 1
+            font_scale_val = 1
+            
+            score_y1 = 6
+            score_y2 = 18
+            best_x = 130
+            
+        # Draw Scores
+        self.fb_display.draw_string("SCORE:", 15, score_y1, font_scale_score, 255, 215, 0)
+        self.fb_display.draw_string(str(self.score), 15, score_y2, font_scale_val, 255, 255, 255)
         
-        self.fb_display.draw_string("BEST:", 185, 12, 1, 255, 215, 0)
-        self.fb_display.draw_string(str(max(self.score, self.high_score)), 185, 24, 2, 255, 255, 255)
+        self.fb_display.draw_string("BEST:", best_x, score_y1, font_scale_score, 255, 215, 0)
+        self.fb_display.draw_string(str(max(self.score, self.high_score)), best_x, score_y2, font_scale_val, 255, 255, 255)
         
-        self.fb_display.draw_rect(40, 65, 240, 240, 60, 60, 60)
-        
-        cell_size = 50
-        padding = 8
+        # Draw Board Container
+        self.fb_display.draw_rect(grid_x, grid_y, grid_w, grid_h, 60, 60, 60)
         
         TILE_COLORS = {
             0: (100, 100, 100),
@@ -444,8 +496,8 @@ class Game2048:
         for r in range(4):
             for c in range(4):
                 val = self.grid[r][c]
-                cell_x = 48 + c * 58
-                cell_y = 73 + r * 58
+                cell_x = grid_x + cell_offset + c * cell_step
+                cell_y = grid_y + cell_offset + r * cell_step
                 
                 bg_color = TILE_COLORS.get(val, (60, 60, 60))
                 self.fb_display.draw_rect(cell_x, cell_y, cell_size, cell_size, *bg_color)
@@ -455,23 +507,38 @@ class Game2048:
                     num_digits = len(val_str)
                     tx_color = (119, 110, 101) if val in [2, 4] else (255, 255, 255)
                     
-                    if num_digits == 1:
-                        scale = 2
-                        tx_x = cell_x + 17
-                        tx_y = cell_y + 17
-                    elif num_digits == 2:
-                        scale = 2
-                        tx_x = cell_x + 9
-                        tx_y = cell_y + 17
-                    elif num_digits == 3:
-                        scale = 1
-                        tx_x = cell_x + 13
-                        tx_y = cell_y + 21
+                    if width >= 320 and height >= 320:
+                        if num_digits == 1:
+                            scale = 2
+                            tx_x = cell_x + 17
+                            tx_y = cell_y + 17
+                        elif num_digits == 2:
+                            scale = 2
+                            tx_x = cell_x + 9
+                            tx_y = cell_y + 17
+                        elif num_digits == 3:
+                            scale = 1
+                            tx_x = cell_x + 13
+                            tx_y = cell_y + 21
+                        else:
+                            scale = 1
+                            tx_x = cell_x + 9
+                            tx_y = cell_y + 21
                     else:
                         scale = 1
-                        tx_x = cell_x + 9
-                        tx_y = cell_y + 21
-                        
+                        if num_digits == 1:
+                            tx_x = cell_x + 14
+                            tx_y = cell_y + 14
+                        elif num_digits == 2:
+                            tx_x = cell_x + 10
+                            tx_y = cell_y + 14
+                        elif num_digits == 3:
+                            tx_x = cell_x + 6
+                            tx_y = cell_y + 14
+                        else:
+                            tx_x = cell_x + 2
+                            tx_y = cell_y + 14
+                            
                     self.fb_display.draw_string(val_str, tx_x, tx_y, scale, *tx_color)
                     
         self.fb_display.flush()
