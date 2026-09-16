@@ -1,0 +1,19 @@
+[Unit]
+Description=Calculinux Graphical Dashboard Launcher
+After=network.target bluez-alsa.service
+DefaultDependencies=no
+
+[Service]
+Type=idle
+ExecStart=/usr/bin/python3 /home/root/apps/py2048/dashboard.py
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+User=root
+WorkingDirectory=/home/root
+
+[Install]
+WantedBy=graphical.target multi-user.target
