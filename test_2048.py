@@ -316,11 +316,13 @@ Added Tile: 2 at (3, 2)
         score = game_module.expectimax_t3(grid, depth=2, is_player=True)
         self.assertTrue(isinstance(score, (int, float)))
 
+    @patch("builtins.input")
     @patch("2048.Game2048.render")
     @patch("select.select")
     @patch("socket.socket")
     @patch("sys.stdin")
-    def test_udp_server_commands(self, mock_stdin, mock_socket_cls, mock_select, mock_render):
+    def test_udp_server_commands(self, mock_stdin, mock_socket_cls, mock_select, mock_render, mock_input):
+        mock_input.return_value = "TestBot"
         mock_socket = MagicMock()
         mock_socket_cls.return_value = mock_socket
         

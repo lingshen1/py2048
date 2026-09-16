@@ -1679,6 +1679,7 @@ def run_udp_server(port=10000):
                     elif key == "q":
                         console.print("\n[yellow]UDP Server stopped by user.[/yellow]\n")
                         server_socket.close()
+                        check_and_save_leaderboard(game.score, game.recall_count, game)
                         return
                     elif key == "i":
                         game.inverted_mode = not game.inverted_mode
@@ -1725,6 +1726,7 @@ def run_udp_server(port=10000):
                     elif msg in ["q", "quit"]:
                         console.print(f"\n[yellow]UDP Client {addr} requested quit.[/yellow]\n")
                         server_socket.close()
+                        check_and_save_leaderboard(game.score, game.recall_count, game)
                         return
                         
                     reply = {
@@ -1791,7 +1793,7 @@ def main():
                 console.print(f"[yellow]Invalid port number '{sys.argv[idx + 1]}'. Using default 10000.[/yellow]")
         run_udp_server(port)
         return
-    elif len(sys.argv) > 1 and sys.argv[1] in ["-p", "--playback"]:
+    elif "-p" in sys.argv or "--playback" in sys.argv:
         log_file = list_and_select_log()
         if log_file:
             frames = parse_log_file(log_file)
@@ -1800,13 +1802,13 @@ def main():
                 if game is not None:
                     run_active_game(game)
         return
-    elif len(sys.argv) > 1 and sys.argv[1] in ["-t1", "--test1"]:
+    elif "-t1" in sys.argv or "--test1" in sys.argv:
         run_random_test_mode()
         return
-    elif len(sys.argv) > 1 and sys.argv[1] in ["-t2", "--test2"]:
+    elif "-t2" in sys.argv or "--test2" in sys.argv:
         run_strategic_test_mode()
         return
-    elif len(sys.argv) > 1 and sys.argv[1] in ["-t3", "--test3", "-t", "--test"]:
+    elif "-t3" in sys.argv or "--test3" in sys.argv or "-t" in sys.argv or "--test" in sys.argv:
         run_predictive_test_mode()
         return
 
