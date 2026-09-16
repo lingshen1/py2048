@@ -133,6 +133,40 @@ class FramebufferDisplay:
                         idx = (py * self.width + px) * self.bpp
                         self.backbuffer[idx : idx + self.bpp] = color_bytes
 
+    def draw_3d_circle(self, cx, cy, radius, is_white):
+        # Specular light highlight offset towards the top-left
+        lx = cx - radius // 3
+        ly = cy - radius // 3
+        
+        for dy in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
+                if dx*dx + dy*dy <= radius*radius:
+                    px = cx + dx
+                    py = cy + dy
+                    if 0 <= px < self.width and 0 <= py < self.height:
+                        dist = math.sqrt((px - lx)**2 + (py - ly)**2)
+                        
+                        if dist < radius // 4:
+                            # Shiny reflection specular highlight dot
+                            r, g, b = (255, 255, 255) if is_white else (200, 200, 200)
+                        else:
+                            # Standard diffuse radial falloff shadow
+                            factor = dist / (1.6 * radius)
+                            factor = min(1.0, max(0.0, factor))
+                            if is_white:
+                                # Blend from pure shiny white to soft grey shadow
+                                r = int(255 - factor * 135)
+                                g = int(255 - factor * 135)
+                                b = int(255 - factor * 135)
+                            else:
+                                # Blend from soft grey highlights to dark charcoal shadows
+                                r = int(100 - factor * 95)
+                                g = int(100 - factor * 95)
+                                b = int(100 - factor * 95)
+                                
+                        idx = (py * self.width + px) * self.bpp
+                        self.backbuffer[idx : idx + self.bpp] = self.get_pixel_color(r, g, b)
+
     def draw_char(self, char, x, y, scale, r, g, b):
         bitmap = BITMAP_FONT.get(char.lower(), BITMAP_FONT[' '])
         for row_idx, row_byte in enumerate(bitmap):
@@ -558,19 +592,26 @@ class ReversiGame:
         else:
             self.fb_display.draw_string("BOT THINKING...", 95, 15, 1, 255, 165, 0)
             
-        # 3. Draw Green Felt Board Container (240x240 centered)
+        # 3. Draw Wooden "Go-Board" Container (240x240 centered)
         grid_x = (width - 240) // 2
         grid_y = 65
-        # Fill board container with solid green table felt
-        self.fb_display.draw_rect(grid_x, grid_y, 240, 240, 34, 139, 34)
         
-        # Draw 9 horizontal and 9 vertical grid lines (very fast!)
+        # Draw alternative wood squares (checkered warm-wood style)
+        cell_step = 30
+        for r in range(8):
+            for c in range(8):
+                cx = grid_x + c * cell_step
+                cy = grid_y + r * cell_step
+                # Checkered wood board color palette
+                wood_color = (210, 180, 140) if (r + c) % 2 == 0 else (139, 90, 43)
+                self.fb_display.draw_rect(cx, cy, cell_step, cell_step, *wood_color)
+        
+        # Draw grid lines (elegant thin dark-brown lines, matching real Go-board)
         for i in range(9):
-            self.fb_display.draw_rect(grid_x, grid_y + i * 30, 240, 1, 0, 80, 0)
-            self.fb_display.draw_rect(grid_x + i * 30, grid_y, 1, 240, 0, 80, 0)
+            self.fb_display.draw_rect(grid_x, grid_y + i * 30, 240, 1, 90, 45, 10)
+            self.fb_display.draw_rect(grid_x + i * 30, grid_y, 1, 240, 90, 45, 10)
         
         cell_size = 28
-        cell_step = 30
         offset = 1
         
         valid_moves = self.get_valid_moves(self.current_turn) if self.current_turn == 1 else {}
@@ -581,15 +622,13 @@ class ReversiGame:
                 cx = grid_x + offset + c * cell_step
                 cy = grid_y + offset + r * cell_step
                 
-                # Draw Discs
+                # Draw 3D-Shaded Spherical Discs
                 if val == 1:
-                    # Black disc with high contrast light-blue outline
-                    self.fb_display.draw_circle(cx + 14, cy + 14, 11, 0, 255, 255)
-                    self.fb_display.draw_circle(cx + 14, cy + 14, 10, 10, 10, 10)
+                    # Shiny 3D Black disc (obsidian style)
+                    self.fb_display.draw_3d_circle(cx + 14, cy + 14, 11, is_white=False)
                 elif val == 2:
-                    # White disc with dark outline
-                    self.fb_display.draw_circle(cx + 14, cy + 14, 11, 150, 150, 150)
-                    self.fb_display.draw_circle(cx + 14, cy + 14, 10, 255, 255, 255)
+                    # Shiny 3D White disc (marble/ivory style)
+                    self.fb_display.draw_3d_circle(cx + 14, cy + 14, 11, is_white=True)
                 elif (r, c) in valid_moves:
                     # Yellow small dot for legal moves
                     self.fb_display.draw_circle(cx + 14, cy + 14, 3, 255, 215, 0)

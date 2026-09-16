@@ -91,6 +91,8 @@ class TestReversiGame(unittest.TestCase):
         display = game_module.FramebufferDisplay()
         display.clear(0, 0, 0)
         display.draw_circle(100, 100, 10, 255, 255, 255)
+        display.draw_3d_circle(150, 150, 11, is_white=True)
+        display.draw_3d_circle(180, 150, 11, is_white=False)
         display.draw_string("WIN", 10, 10, 1, 255, 0, 0)
         display.flush()
         

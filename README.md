@@ -278,10 +278,11 @@ While hand-crafted heuristics are excellent, they cannot easily capture subtle p
 In addition to 2048, a fully featured **Reversi (Othello)** game is available as a standalone executable (`reversi.py`).
 
 ### Key Features
-* **Double-Buffered Framebuffer Graphics (`-g` / `--graph`):** Renders a classic "green felt table" with circular Black and White discs, a yellow selector cursor, and live scorecard overlays directly on `/dev/fb0`. It automatically detects display boundaries (adapting layouts dynamically to `240x240` or `320x320`).
-* **Interactive Local Terminal Fallback:** Renders a gorgeous, high-contrast, fully playable 8x8 text matrix on standard console windows using Rich.
-* **Keyboard-Controlled Cursor:** Navigate using **WASD or Arrow Keys** and place discs using **Space or Enter**.
+* **Double-Buffered Framebuffer Graphics (`-g` / `--graph`):** Renders a classic checkered wooden "Go-board" (with Burlywood and Warm Sienna alternating patterns and elegant dark borders) populated by **shiny, 3D-shaded obsidian (Black) and ivory (White) spherical discs** utilizing top-left specular highlights and radial diffuse shadows. It automatically detects display boundaries (adapting layouts dynamically to `240x240` or `320x320`).
+* **Interactive Local Terminal Fallback:** Renders a gorgeous, high-contrast, fully playable 8x8 text matrix of `.`, `X`, and `O` on standard console windows using Rich.
+* **Tactile Cursor Snapping:** Cursor automatically snaps to valid legal moves, and pressing Arrow keys or WASD hops the selector cursor exclusively between valid coordinates to ensure rapid, error-free play!
 * **George Frideric Händel Victory Audio:** If an active ALSA driver is detected, plays Händel's famous victory chorus *"See, the conqu'ring hero comes!"* in raw 8-bit U8 PCM in the background.
+* **Persistent Leaderboard:** Stores up to 20 high scores in `reversi_high_scores.json` detailing player name, friendly disc count, bot disc count, and timestamp.
 
 ### Master-Level AI Bot Heuristics
 The Othello AI uses a depth-3/4 Minimax Search with Alpha-Beta Pruning, guided by a multi-phase evaluation function implementing expert game-theory:
