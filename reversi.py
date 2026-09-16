@@ -123,6 +123,7 @@ class FramebufferDisplay:
                     self.backbuffer[idx_start:idx_end] = color_bytes * (end_x - start_x)
 
     def draw_circle(self, cx, cy, radius, r, g, b):
+        color_bytes = self.get_pixel_color(r, g, b)
         for dy in range(-radius, radius + 1):
             for dx in range(-radius, radius + 1):
                 if dx*dx + dy*dy <= radius*radius:
@@ -130,7 +131,7 @@ class FramebufferDisplay:
                     py = cy + dy
                     if 0 <= px < self.width and 0 <= py < self.height:
                         idx = (py * self.width + px) * self.bpp
-                        self.backbuffer[idx : idx + self.bpp] = self.get_pixel_color(r, g, b)
+                        self.backbuffer[idx : idx + self.bpp] = color_bytes
 
     def draw_char(self, char, x, y, scale, r, g, b):
         bitmap = BITMAP_FONT.get(char.lower(), BITMAP_FONT[' '])
@@ -211,6 +212,7 @@ class ReversiGame:
         self.current_turn = 1 # Black starts
         self.cursor_r = 3
         self.cursor_c = 2
+        self.cursor_idx = 0
         
         # Positional value matrix for evaluation
         self.W_MATRIX = [
@@ -489,7 +491,7 @@ class ReversiGame:
             header_style="bold green",
             box=None,
             expand=False,
-            title=f"🟢 REVERSI (OTHELLO) 🟢\n[bold cyan]Human (Black ●): {black}[/bold cyan] | [bold magenta]Bot (White ○): {white}[/bold magenta]"
+            title=f"🟢 REVERSI (OTHELLO) 🟢\n[bold cyan]Human (Black X): {black}[/bold cyan] | [bold magenta]Bot (White O): {white}[/bold magenta]"
         )
         
         table.add_column(" ", justify="center", width=3)
@@ -505,13 +507,13 @@ class ReversiGame:
                 is_cursor = (r == self.cursor_r and c == self.cursor_c)
                 
                 if val == 1:
-                    cell_char = "●"
+                    cell_char = "X"
                     style = "bold cyan"
                 elif val == 2:
-                    cell_char = "○"
+                    cell_char = "O"
                     style = "bold white"
                 elif (r, c) in valid_moves:
-                    cell_char = "·"
+                    cell_char = "*"
                     style = "bold yellow blink"
                 else:
                     cell_char = "."
@@ -559,9 +561,14 @@ class ReversiGame:
         # 3. Draw Green Felt Board Container (240x240 centered)
         grid_x = (width - 240) // 2
         grid_y = 65
+        # Fill board container with solid green table felt
         self.fb_display.draw_rect(grid_x, grid_y, 240, 240, 34, 139, 34)
         
-        # Draw cells and lines
+        # Draw 9 horizontal and 9 vertical grid lines (very fast!)
+        for i in range(9):
+            self.fb_display.draw_rect(grid_x, grid_y + i * 30, 240, 1, 0, 80, 0)
+            self.fb_display.draw_rect(grid_x + i * 30, grid_y, 1, 240, 0, 80, 0)
+        
         cell_size = 28
         cell_step = 30
         offset = 1
@@ -573,11 +580,6 @@ class ReversiGame:
                 val = self.board[r][c]
                 cx = grid_x + offset + c * cell_step
                 cy = grid_y + offset + r * cell_step
-                
-                # Draw cell grid border line (black)
-                self.fb_display.draw_rect(cx - 1, cy - 1, cell_step, cell_step, 0, 80, 0)
-                # Redraw cell green
-                self.fb_display.draw_rect(cx, cy, cell_size, cell_size, 34, 139, 34)
                 
                 # Draw Discs
                 if val == 1:
@@ -824,6 +826,105 @@ def play_text_celebration(text="YOU WIN!"):
         time.sleep(0.08)
 
 
+REVERSI_SCORE_FILE = "reversi_high_scores.json"
+
+
+def load_reversi_leaderboard():
+    if os.path.exists(REVERSI_SCORE_FILE):
+        try:
+            with open(REVERSI_SCORE_FILE, "r") as f:
+                data = json.load(f)
+                return data.get("scores", []), data.get("high_score", 0)
+        except Exception:
+            return [], 0
+    return [], 0
+
+
+def save_reversi_leaderboard(scores, high_score):
+    try:
+        with open(REVERSI_SCORE_FILE, "w") as f:
+            json.dump({"high_score": high_score, "scores": scores}, f, indent=4)
+    except Exception as e:
+        console.print(f"[red]Error saving Reversi high scores: {e}[/red]")
+
+
+def display_reversi_leaderboard():
+    scores, historical_best = load_reversi_leaderboard()
+    table = Table(title="🏆 REVERSI LEADERBOARD (TOP 20) 🏆", expand=False)
+    table.add_column("Rank", justify="center", style="yellow")
+    table.add_column("Player", justify="left", style="cyan")
+    table.add_column("Your Discs", justify="right", style="green")
+    table.add_column("Bot Discs", justify="right", style="magenta")
+    table.add_column("Date", justify="center", style="dim white")
+    
+    sorted_scores = sorted(scores, key=lambda x: x.get("score", 0), reverse=True)[:20]
+    
+    for idx, item in enumerate(sorted_scores):
+        table.add_row(
+            str(idx + 1),
+            item.get("name", "Anonymous"),
+            str(item.get("score", 0)),
+            str(item.get("bot_score", 0)),
+            item.get("date", "N/A")
+        )
+        
+    if not sorted_scores:
+        table.add_row("-", "No high scores yet!", "0", "0", "-")
+        
+    console.print(table)
+
+
+def check_and_save_reversi_leaderboard(score, bot_score, game=None):
+    scores, historical_best = load_reversi_leaderboard()
+    
+    is_qualifying = False
+    if len(scores) < 20:
+        is_qualifying = True
+    else:
+        min_score = min(item.get("score", 0) for item in scores)
+        if score > min_score:
+            is_qualifying = True
+            
+    if is_qualifying:
+        all_time_best = max([item.get("score", 0) for item in scores] + [historical_best])
+        is_all_time_best = (score > all_time_best) or (not scores and score > 0)
+        
+        text_video = "ALL-TIME HIGH SCORE!" if is_all_time_best else "NEW LEADERBOARD SCORE!"
+        
+        if game is not None and hasattr(game, "fb_display") and game.fb_display:
+            play_graphical_celebration(game.fb_display, text_video)
+        else:
+            play_text_celebration(text_video)
+            
+        console.print("\n[bold yellow]🏆 YOU ACHIEVED A REVERSI LEADERBOARD HIGH SCORE! 🏆[/bold yellow]")
+        try:
+            player_name = input("Enter your name (max 15 chars): ").strip()
+        except (KeyboardInterrupt, EOFError):
+            player_name = "Anonymous"
+            
+        if not player_name:
+            player_name = "Anonymous"
+        player_name = player_name[:15]
+        
+        new_entry = {
+            "name": player_name,
+            "score": score,
+            "bot_score": bot_score,
+            "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        scores.append(new_entry)
+        scores = sorted(scores, key=lambda x: x.get("score", 0), reverse=True)[:20]
+        
+        new_historical_best = max(score, historical_best)
+        save_reversi_leaderboard(scores, new_historical_best)
+        console.print("\n[bold green]Reversi high score saved successfully![/bold green]\n")
+    else:
+        console.print(f"\n[bold yellow]Your score: {score} did not make the top 20 leaderboard.[/bold yellow]\n")
+        
+    display_reversi_leaderboard()
+
+
 def main():
     game = ReversiGame()
     
@@ -852,7 +953,14 @@ def main():
             
             # 2. Process Turn
             if game.current_turn == 1:
-                # Human Turn (Black)
+                # Human Turn (Black) - Snap cursor to valid moves
+                valid_coords = sorted(list(valid_moves.keys()))
+                if (game.cursor_r, game.cursor_c) not in valid_coords:
+                    game.cursor_r, game.cursor_c = valid_coords[0]
+                    game.cursor_idx = 0
+                else:
+                    game.cursor_idx = valid_coords.index((game.cursor_r, game.cursor_c))
+
                 try:
                     key = get_key()
                 except (KeyboardInterrupt, EOFError):
@@ -860,23 +968,22 @@ def main():
                     
                 if key == "q":
                     console.print("\n[yellow]Game exited.[/yellow]\n")
+                    black, white = game.count_discs()
+                    if black > white:
+                        check_and_save_reversi_leaderboard(black, white, game)
                     return
-                elif key == "a": # Left
-                    game.cursor_c = max(0, game.cursor_c - 1)
-                elif key == "d": # Right
-                    game.cursor_c = min(7, game.cursor_c + 1)
-                elif key == "w": # Up
-                    game.cursor_r = max(0, game.cursor_r - 1)
-                elif key == "s": # Down
-                    game.cursor_r = min(7, game.cursor_r + 1)
+                elif key in ["d", "s"]: # Forward step in valid moves
+                    game.cursor_idx = (game.cursor_idx + 1) % len(valid_coords)
+                    game.cursor_r, game.cursor_c = valid_coords[game.cursor_idx]
+                elif key in ["a", "w"]: # Backward step in valid moves
+                    game.cursor_idx = (game.cursor_idx - 1) % len(valid_coords)
+                    game.cursor_r, game.cursor_c = valid_coords[game.cursor_idx]
                 elif key in [" ", "\r", "\n"]:
-                    # Try to place disc
-                    if (game.cursor_r, game.cursor_c) in valid_moves:
-                        game.execute_move(game.cursor_r, game.cursor_c, 1)
-                        # Switch to bot
-                        game.current_turn = 2
+                    game.execute_move(game.cursor_r, game.cursor_c, 1)
+                    # Switch to bot
+                    game.current_turn = 2
             else:
-                # Bot Turn (White) - Let's render once and sleep slightly for natural feedback
+                # Bot Turn (White)
                 game.render()
                 time.sleep(0.6)
                 
@@ -890,27 +997,22 @@ def main():
                 # Reset human cursor to first valid move (if any)
                 human_moves = game.get_valid_moves(1)
                 if human_moves:
-                    hm_list = list(human_moves.keys())
-                    # Prefer closest to previous cursor or first available
+                    hm_list = sorted(list(human_moves.keys()))
                     game.cursor_r, game.cursor_c = hm_list[0]
+                    game.cursor_idx = 0
                     
     # --- Game Over Celebrations ---
     black, white = game.count_discs()
     console.clear()
     
     if black > white:
-        text_win = f"YOU WIN! {black} - {white}"
-        if game.fb_display:
-            play_graphical_celebration(game.fb_display, text_win)
-        else:
-            play_text_celebration(text_win)
-        console.print(f"\n[bold green]🏆 CONGRATULATIONS! You defeated the AI Bot {black} to {white}! 🏆[/bold green]\n")
+        check_and_save_reversi_leaderboard(black, white, game)
     elif white > black:
-        text_loss = f"BOT WINS! {white} - {black}"
         console.print(f"\n[bold red]💀 GAME OVER! The AI Bot defeated you {white} to {black}.[/bold red]\n")
+        display_reversi_leaderboard()
     else:
-        text_tie = f"TIE GAME! {black} - {white}"
         console.print(f"\n[bold yellow]🤝 TIE GAME! You tied with the AI Bot {black} to {white}.[/bold yellow]\n")
+        display_reversi_leaderboard()
 
 
 if __name__ == "__main__":

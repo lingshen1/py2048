@@ -97,6 +97,18 @@ class TestReversiGame(unittest.TestCase):
         mock_map.seek.assert_called_with(0)
         mock_map.write.assert_called_with(display.backbuffer)
 
+    @patch("builtins.input")
+    @patch("reversi.play_graphical_celebration")
+    @patch("reversi.play_text_celebration")
+    @patch("reversi.save_reversi_leaderboard")
+    def test_reversi_leaderboard(self, mock_save, mock_text_cel, mock_graph_cel, mock_input):
+        mock_input.return_value = "TestReversi"
+        
+        # Verify that checking and saving works cleanly
+        game_module.check_and_save_reversi_leaderboard(score=40, bot_score=24)
+        mock_save.assert_called_once()
+        mock_text_cel.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
