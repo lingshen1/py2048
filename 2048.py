@@ -5,6 +5,7 @@ import mmap
 import os
 import random
 import select
+import shutil
 import socket
 import subprocess
 import sys
@@ -786,6 +787,10 @@ def play_conquering_hero_song():
     if not is_sound_driver_detected():
         return
         
+    # Check if aplay command actually exists in system PATH
+    if not shutil.which("aplay"):
+        return
+        
     sample_rate = 8000
     wave = bytearray()
     
@@ -813,9 +818,17 @@ def play_conquering_hero_song():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
-        p.stdin.write(bytes(wave))
-        p.stdin.flush()
-        p.stdin.close()
+        if p and p.stdin:
+            try:
+                p.stdin.write(bytes(wave))
+                p.stdin.flush()
+            except Exception:
+                pass
+            finally:
+                try:
+                    p.stdin.close()
+                except Exception:
+                    pass
     except Exception:
         pass
 
