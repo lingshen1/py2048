@@ -121,6 +121,7 @@ class FramebufferDisplay:
             self.fb_file = open("/dev/fb0", "r+b")
             self.fb_map = mmap.mmap(self.fb_file.fileno(), self.size_bytes)
             self.backbuffer = bytearray(self.size_bytes)
+            self.tile_cache = {}
         except Exception as e:
             raise RuntimeError(f"Cannot initialize /dev/fb0: {e}")
 
@@ -150,52 +151,83 @@ class FramebufferDisplay:
                     idx_end = (cy * self.width + end_x) * self.bpp
                     self.backbuffer[idx_start:idx_end] = color_bytes * (end_x - start_x)
 
-    def draw_3d_rounded_rect(self, x, y, w, h, R, r, g, b):
-        start_y = max(0, y)
-        end_y = min(self.height, y + h)
-        start_x = max(0, x)
-        end_x = min(self.width, x + w)
-        diag = float(w + h)
+    def blit_tile(self, x, y, cell_size, val):
+        TILE_COLORS = {
+            0: (100, 100, 100),
+            2: (238, 228, 218),
+            4: (237, 224, 200),
+            8: (242, 177, 121),
+            16: (245, 149, 99),
+            32: (246, 124, 95),
+            64: (246, 94, 59),
+            128: (237, 207, 114),
+            256: (237, 204, 97),
+            512: (237, 200, 80),
+            1024: (237, 197, 63),
+            2048: (237, 194, 46)
+        }
         
-        for py in range(start_y, end_y):
-            dy = py - y
-            for px in range(start_x, end_x):
-                dx = px - x
-                
-                # Corner clipping
-                if dx < R and dy < R:
-                    if (dx - R)**2 + (dy - R)**2 > R*R:
-                        continue
-                elif dx >= w - R and dy < R:
-                    if (dx - (w - R))**2 + (dy - R)**2 > R*R:
-                        continue
-                elif dx < R and dy >= h - R:
-                    if (dx - R)**2 + (dy - (h - R))**2 > R*R:
-                        continue
-                elif dx >= w - R and dy >= h - R:
-                    if (dx - (w - R))**2 + (dy - (h - R))**2 > R*R:
-                        continue
-                        
-                # 3D gradient shading (light source from top-left)
-                factor = (dx + dy) / diag
-                if factor < 0.15:
-                    h_weight = (1.0 - factor / 0.15) * 0.35
-                    pr = int(r + (255 - r) * h_weight)
-                    pg = int(g + (255 - g) * h_weight)
-                    pb = int(b + (255 - b) * h_weight)
-                elif factor > 0.85:
-                    s_weight = 0.65 + 0.35 * (1.0 - (factor - 0.85) / 0.15)
-                    pr = int(r * s_weight)
-                    pg = int(g * s_weight)
-                    pb = int(b * s_weight)
-                else:
-                    slope = 1.1 - 0.45 * ((factor - 0.15) / 0.70)
-                    pr = int(min(255, r * slope))
-                    pg = int(min(255, g * slope))
-                    pb = int(min(255, b * slope))
+        cache_key = (cell_size, val)
+        if cache_key not in self.tile_cache:
+            bg_color = TILE_COLORS.get(val, (60, 60, 60))
+            r, g, b = bg_color
+            R = 6 if cell_size >= 50 else 4
+            
+            tile_buf = bytearray(cell_size * cell_size * self.bpp)
+            diag = float(cell_size + cell_size)
+            
+            for py in range(cell_size):
+                for px in range(cell_size):
+                    dx = px
+                    dy = py
                     
-                idx = (py * self.width + px) * self.bpp
-                self.backbuffer[idx : idx + self.bpp] = self.get_pixel_color(pr, pg, pb)
+                    # Symmetric corner clipping
+                    if dx < R and dy < R:
+                        if (R - 1 - dx)**2 + (R - 1 - dy)**2 > R*R:
+                            continue
+                    elif dx >= cell_size - R and dy < R:
+                        if (dx - (cell_size - R))**2 + (R - 1 - dy)**2 > R*R:
+                            continue
+                    elif dx < R and dy >= cell_size - R:
+                        if (R - 1 - dx)**2 + (dy - (cell_size - R))**2 > R*R:
+                            continue
+                    elif dx >= cell_size - R and dy >= cell_size - R:
+                        if (dx - (cell_size - R))**2 + (dy - (cell_size - R))**2 > R*R:
+                            continue
+                            
+                    # 3D shading
+                    factor = (dx + dy) / diag
+                    if factor < 0.15:
+                        h_weight = (1.0 - factor / 0.15) * 0.35
+                        pr = int(r + (255 - r) * h_weight)
+                        pg = int(g + (255 - g) * h_weight)
+                        pb = int(b + (255 - b) * h_weight)
+                    elif factor > 0.85:
+                        s_weight = 0.65 + 0.35 * (1.0 - (factor - 0.85) / 0.15)
+                        pr = int(r * s_weight)
+                        pg = int(g * s_weight)
+                        pb = int(b * s_weight)
+                    else:
+                        slope = 1.1 - 0.45 * ((factor - 0.15) / 0.70)
+                        pr = int(min(255, r * slope))
+                        pg = int(min(255, g * slope))
+                        pb = int(min(255, b * slope))
+                        
+                    pixel_bytes = self.get_pixel_color(pr, pg, pb)
+                    idx = (py * cell_size + px) * self.bpp
+                    tile_buf[idx : idx + self.bpp] = pixel_bytes
+                    
+            self.tile_cache[cache_key] = tile_buf
+            
+        cache_data = self.tile_cache[cache_key]
+        row_bytes = cell_size * self.bpp
+        
+        for dy in range(cell_size):
+            cy = y + dy
+            if 0 <= cy < self.height:
+                idx_back = (cy * self.width + x) * self.bpp
+                idx_cache = dy * row_bytes
+                self.backbuffer[idx_back : idx_back + row_bytes] = cache_data[idx_cache : idx_cache + row_bytes]
 
     def draw_char(self, char, x, y, scale, r, g, b):
         bitmap = BITMAP_FONT.get(char.lower(), BITMAP_FONT[' '])
@@ -549,9 +581,7 @@ class Game2048:
                 cell_x = grid_x + cell_offset + c * cell_step
                 cell_y = grid_y + cell_offset + r * cell_step
                 
-                bg_color = TILE_COLORS.get(val, (60, 60, 60))
-                R = 6 if (width >= 320 and height >= 320) else 4
-                self.fb_display.draw_3d_rounded_rect(cell_x, cell_y, cell_size, cell_size, R, *bg_color)
+                self.fb_display.blit_tile(cell_x, cell_y, cell_size, val)
                 
                 if val > 0:
                     val_str = str(val)
