@@ -928,7 +928,7 @@ def check_and_save_reversi_leaderboard(score, bot_score, game=None):
         all_time_best = max([item.get("score", 0) for item in scores] + [historical_best])
         is_all_time_best = (score > all_time_best) or (not scores and score > 0)
         
-        text_video = "ALL-TIME HIGH SCORE!" if is_all_time_best else "NEW LEADERBOARD SCORE!"
+        text_video = "ALL-TIME HIGH SCORE!" if is_all_time_best else "NEW HIGH SCORE!"
         
         if game is not None and hasattr(game, "fb_display") and game.fb_display:
             play_graphical_celebration(game.fb_display, text_video)
