@@ -22,7 +22,7 @@ Now upgraded with game logging, interactive playback, step-jumping, active state
 * **Top-20 Leaderboard:** Stores up to 20 top records in `high_scores.json` detailing Player Name, Score, Recalls, and Timestamp.
 * **ASCII Fireworks "Video":** Plays a physics-based, gravity-simulated particle fireworks show in flashing console colors whenever a leaderboard high score is achieved.
 * **Global Contextual Help Overlay (`H`/`?`):** Instantly displays a modal help screen tailored to your current mode (Active Play, Playback, or Bot Mode).
-* **Calculinux Framebuffer Graphics Display (`-g`):** Auto-detects the Calculinux 320x320 display and draws high-performance, double-buffered full-color graphics directly onto `/dev/fb0` using a custom pixel-art font and native colors. Can be combined with other modes (e.g. Server, Playback, or Bot Mode).
+* **Calculinux Framebuffer Graphics Display (`-g`):** Auto-detects the Calculinux 320x320 display and draws high-performance, double-buffered full-color graphics directly onto `/dev/fb0` using a custom pixel-art font. **Tiles are rendered as beautiful, smooth 3D rounded-corner squares with specular top-left highlights and soft bottom-right wrap-around shadows, creating a highly tactile, premium visual aesthetic.** Can be combined with other modes (e.g. Server, Playback, or Bot Mode).
 
 ---
 

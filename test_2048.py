@@ -383,6 +383,7 @@ Added Tile: 2 at (3, 2)
         self.assertEqual(len(fb_display.backbuffer), 320 * 320 * 4)
         
         fb_display.draw_rect(10, 10, 50, 50, 255, 0, 0)
+        fb_display.draw_3d_rounded_rect(10, 10, 50, 50, R=6, r=238, g=228, b=218)
         fb_display.draw_string("123", 20, 20, scale=2, r=255, g=255, b=255)
         
         fb_display.flush()
