@@ -869,7 +869,7 @@ def play_conquering_hero_song():
     if not shutil.which("aplay"):
         return
 
-    sample_rate = 16000
+    sample_rate = 8000
     wave = bytearray()
 
     # G5=784, F#5=740, A5=880, D5=587, B5=988, C6=1047
@@ -898,7 +898,7 @@ def play_conquering_hero_song():
 
     try:
         p = subprocess.Popen(
-            ["aplay", "-q", "-t", "raw", "-r", "16000", "-f", "S16_LE"],
+            ["aplay", "-q", "-D", "plug:default", "-t", "raw", "-r", "8000", "-f", "S16_LE"],
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
