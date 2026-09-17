@@ -351,11 +351,27 @@ class CalculinuxDashboard:
         
         # 2. Check if we are running inside a TMUX session for non-blocking multi-window multitasking!
         if "TMUX" in os.environ:
-            tmux_cmd = f"tmux new-window -n '{name}' '{cmd}'"
+            # Query active window names to see if this application is already running in background
+            try:
+                res = subprocess.run(
+                    ["tmux", "list-windows", "-F", "#{window_name}"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=2.0
+                )
+                active_windows = [line.strip() for line in res.stdout.splitlines() if line.strip()]
+            except Exception:
+                active_windows = []
+
+            if name in active_windows:
+                # App is already running in the background! Seamlessly switch back/select its existing window!
+                tmux_cmd = f"tmux select-window -t '{name}'"
+            else:
+                # App is not running yet! Spawn it in a new window!
+                tmux_cmd = f"tmux new-window -n '{name}' '{cmd}'"
+                
             try:
                 subprocess.run(tmux_cmd, shell=True)
             except Exception as e:
-                console.print(f"[red]Error creating tmux window: {e}[/red]")
+                console.print(f"[red]Error navigating tmux: {e}[/red]")
                 time.sleep(1.0)
         else:
             # Standalone blocking mode: Spawn and run locally in canonical terminal mode (stty restored)
