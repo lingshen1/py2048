@@ -916,6 +916,15 @@ def display_reversi_leaderboard():
 def check_and_save_reversi_leaderboard(score, bot_score, game=None):
     scores, historical_best = load_reversi_leaderboard()
     
+    # Always celebrate if the player wins!
+    if score > bot_score:
+        text_video = "YOU DEFEATED THE BOT!"
+        if game is not None and hasattr(game, "fb_display") and game.fb_display:
+            play_graphical_celebration(game.fb_display, text_video)
+        else:
+            play_text_celebration(text_video)
+        console.print(f"\n[bold green]🏆 CONGRATULATIONS! You defeated the AI Bot {score} to {bot_score}! 🏆[/bold green]")
+        
     is_qualifying = False
     if len(scores) < 20:
         is_qualifying = True
@@ -928,13 +937,6 @@ def check_and_save_reversi_leaderboard(score, bot_score, game=None):
         all_time_best = max([item.get("score", 0) for item in scores] + [historical_best])
         is_all_time_best = (score > all_time_best) or (not scores and score > 0)
         
-        text_video = "ALL-TIME HIGH SCORE!" if is_all_time_best else "NEW HIGH SCORE!"
-        
-        if game is not None and hasattr(game, "fb_display") and game.fb_display:
-            play_graphical_celebration(game.fb_display, text_video)
-        else:
-            play_text_celebration(text_video)
-            
         console.print("\n[bold yellow]🏆 YOU ACHIEVED A REVERSI LEADERBOARD HIGH SCORE! 🏆[/bold yellow]")
         try:
             player_name = input("Enter your name (max 15 chars): ").strip()
@@ -959,7 +961,10 @@ def check_and_save_reversi_leaderboard(score, bot_score, game=None):
         save_reversi_leaderboard(scores, new_historical_best)
         console.print("\n[bold green]Reversi high score saved successfully![/bold green]\n")
     else:
-        console.print(f"\n[bold yellow]Your score: {score} did not make the top 20 leaderboard.[/bold yellow]\n")
+        if score > bot_score:
+            console.print(f"\n[bold yellow]Your score: {score} did not make the top 20 leaderboard.[/bold yellow]\n")
+        else:
+            console.print(f"\n[bold yellow]Your score: {score} (Bot: {bot_score}) did not make the top 20 leaderboard.[/bold yellow]\n")
         
     display_reversi_leaderboard()
 
