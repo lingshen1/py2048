@@ -864,34 +864,41 @@ def is_sound_driver_detected():
 def play_conquering_hero_song():
     if not is_sound_driver_detected():
         return
-        
+
     # Check if aplay command actually exists in system PATH
     if not shutil.which("aplay"):
         return
-        
+
     sample_rate = 8000
     wave = bytearray()
-    
+
     # G5=784, F#5=740, A5=880, D5=587, B5=988, C6=1047
     melody = [
         (784, 0.4), (740, 0.2), (784, 0.2), (880, 0.4), (784, 0.2), (740, 0.2), (784, 0.4), (587, 0.4),
         (0, 0.1),
         (988, 0.4), (880, 0.2), (988, 0.2), (1047, 0.4), (988, 0.2), (880, 0.2), (988, 0.4), (784, 0.4)
     ]
-    
+
     for freq, duration in melody:
         num_samples = int(sample_rate * duration)
         if freq == 0:
-            wave.extend([127] * num_samples)
+            # 16-bit silence is centered at 0 (2 bytes per sample)
+            wave.extend([0] * (num_samples * 2))
         else:
             for i in range(num_samples):
                 t = i / sample_rate
-                val = int(127 + 120 * math.sin(2 * math.pi * freq * t))
-                wave.append(val)
-                
+                # Generate signed 16-bit sine wave centered at 0 with max amplitude of 28000
+                val = int(28000 * math.sin(2 * math.pi * freq * t))
+
+                # Pack signed 16-bit integer into 2 little-endian bytes
+                low_byte = val & 0xFF
+                high_byte = (val >> 8) & 0xFF
+                wave.append(low_byte)
+                wave.append(high_byte)
+
     try:
         p = subprocess.Popen(
-            ["aplay", "-q", "-t", "raw", "-r", "8000", "-f", "U8"],
+            ["aplay", "-q", "-t", "raw", "-r", "8000", "-f", "S16_LE"],
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL

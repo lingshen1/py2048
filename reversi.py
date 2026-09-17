@@ -686,16 +686,23 @@ def play_victory_song(test_mode=False):
     for freq, duration in melody:
         num_samples = int(sample_rate * duration)
         if freq == 0:
-            wave.extend([127] * num_samples)
+            # 16-bit silence is centered at 0 (2 bytes per sample)
+            wave.extend([0] * (num_samples * 2))
         else:
             for i in range(num_samples):
                 t = i / sample_rate
-                val = int(127 + 120 * math.sin(2 * math.pi * freq * t))
-                wave.append(val)
+                # Generate signed 16-bit sine wave centered at 0 with max amplitude of 28000
+                val = int(28000 * math.sin(2 * math.pi * freq * t))
+                
+                # Pack signed 16-bit integer into 2 little-endian bytes
+                low_byte = val & 0xFF
+                high_byte = (val >> 8) & 0xFF
+                wave.append(low_byte)
+                wave.append(high_byte)
 
     # Setup subprocess args depending on test_mode
-    # If test_mode is True, we don't suppress stderr/stdout and don't use -q (quiet) so they see ALSA outputs!
-    aplay_args = ["aplay", "-t", "raw", "-r", "8000", "-f", "U8"]
+    # Use -f S16_LE (Signed 16-bit Little Endian) which is globally supported by Bluetooth headsets
+    aplay_args = ["aplay", "-t", "raw", "-r", "8000", "-f", "S16_LE"]
     if not test_mode:
         aplay_args.insert(1, "-q")
         stdout_dest = subprocess.DEVNULL
