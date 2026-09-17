@@ -668,13 +668,13 @@ def is_sound_driver_detected():
     return False
 
 
-def play_victory_song():
+def play_victory_song(test_mode=False):
     if not is_sound_driver_detected() or not shutil.which("aplay"):
         return
-        
+
     sample_rate = 8000
     wave = bytearray()
-    
+
     # Händel: See, the conquering hero comes!
     # Sol, Fa#, Sol, La, Sol, Fa#, Sol, Re, Si, La, Si, Do, Si, La, Si, Sol
     melody = [
@@ -682,7 +682,7 @@ def play_victory_song():
         (0, 0.1),
         (988, 0.4), (880, 0.2), (988, 0.2), (1047, 0.4), (988, 0.2), (880, 0.2), (988, 0.4), (784, 0.4)
     ]
-    
+
     for freq, duration in melody:
         num_samples = int(sample_rate * duration)
         if freq == 0:
@@ -692,27 +692,40 @@ def play_victory_song():
                 t = i / sample_rate
                 val = int(127 + 120 * math.sin(2 * math.pi * freq * t))
                 wave.append(val)
-                
+
+    # Setup subprocess args depending on test_mode
+    # If test_mode is True, we don't suppress stderr/stdout and don't use -q (quiet) so they see ALSA outputs!
+    aplay_args = ["aplay", "-t", "raw", "-r", "8000", "-f", "U8"]
+    if not test_mode:
+        aplay_args.insert(1, "-q")
+        stdout_dest = subprocess.DEVNULL
+        stderr_dest = subprocess.DEVNULL
+    else:
+        stdout_dest = None
+        stderr_dest = None
+
     try:
         p = subprocess.Popen(
-            ["aplay", "-q", "-t", "raw", "-r", "8000", "-f", "U8"],
+            aplay_args,
             stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stdout=stdout_dest,
+            stderr=stderr_dest
         )
         if p and p.stdin:
             try:
                 p.stdin.write(bytes(wave))
                 p.stdin.flush()
-            except Exception:
-                pass
+            except Exception as e:
+                if test_mode:
+                    console.print(f"[red]Error writing wave bytes to aplay: {e}[/red]")
             finally:
                 try:
                     p.stdin.close()
                 except Exception:
                     pass
-    except Exception:
-        pass
+    except Exception as e:
+        if test_mode:
+            console.print(f"[red]Error spawning aplay subprocess: {e}[/red]")
 
 
 def play_graphical_celebration(display, text="YOU WIN!"):
@@ -979,7 +992,7 @@ def main():
             return
             
         console.print("[green]Playing Händel's 'See, the conquering hero comes!' victory melody as a test...[/green]")
-        play_victory_song()
+        play_victory_song(test_mode=True)
         # Keep process alive for 5.5s so background aplay can complete playing the piped audio
         time.sleep(5.5)
         return
