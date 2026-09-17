@@ -285,7 +285,7 @@ class CalculinuxDashboard:
                 {"name": "CalcBig", "cmd": "python3 /home/root/apps/bigcalc.py", "icon": "K", "color": (255, 105, 180)}
             ],
             [
-                {"name": "Music", "cmd": "mpg123 -C -a plug:bluealsa /home/root/music/*.mp3", "icon": "U", "color": (70, 130, 180)},
+                {"name": "Music", "cmd": "python3 /home/root/apps/py2048/music_player.py -g", "icon": "U", "color": (70, 130, 180)},
                 {"name": "Shell", "cmd": "/bin/sh -i", "icon": "S", "color": (128, 128, 128)},
                 {"name": "RevText", "cmd": "python3 /home/root/apps/py2048/reversi.py", "icon": "V", "color": (0, 128, 128)},
                 {"name": "2048Text", "cmd": "python3 /home/root/apps/py2048/2048.py", "icon": "8", "color": (128, 0, 0)}
