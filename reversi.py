@@ -991,7 +991,25 @@ def main():
             console.print("[red]Error: ALSA 'aplay' utility not found in system PATH.[/red]")
             return
             
-        console.print("[green]Playing Händel's 'See, the conquering hero comes!' victory melody as a test...[/green]")
+        console.print("[bold yellow]--- ALSA DIAGNOSTIC SYSTEM INFO ---[/bold yellow]")
+        if os.path.exists("/proc/asound/cards"):
+            try:
+                with open("/proc/asound/cards", "r") as f:
+                    console.print(f"[bold cyan]/proc/asound/cards:[/bold cyan]\n{f.read().strip()}\n")
+            except Exception:
+                pass
+                
+        try:
+            res = subprocess.run(["aplay", "-l"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=2.0)
+            stdout_out = res.stdout.strip() if res.stdout else "(empty stdout)"
+            stderr_out = res.stderr.strip() if res.stderr else ""
+            console.print(f"[bold cyan]aplay -l output:[/bold cyan]\n{stdout_out}")
+            if stderr_out:
+                console.print(f"[bold red]aplay -l errors:[/bold red]\n{stderr_out}")
+        except Exception as e:
+            console.print(f"[red]Failed to run aplay -l: {e}[/red]")
+            
+        console.print("\n[green]Playing Händel's 'See, the conquering hero comes!' victory melody as a test...[/green]")
         play_victory_song(test_mode=True)
         # Keep process alive for 5.5s so background aplay can complete playing the piped audio
         time.sleep(5.5)
