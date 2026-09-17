@@ -672,7 +672,7 @@ def play_victory_song(test_mode=False):
     if not is_sound_driver_detected() or not shutil.which("aplay"):
         return
 
-    sample_rate = 8000
+    sample_rate = 16000
     wave = bytearray()
 
     # Händel: See, the conquering hero comes!
@@ -701,8 +701,8 @@ def play_victory_song(test_mode=False):
                 wave.append(high_byte)
 
     # Setup subprocess args depending on test_mode
-    # Use -f S16_LE (Signed 16-bit Little Endian) which is globally supported by Bluetooth headsets
-    aplay_args = ["aplay", "-t", "raw", "-r", "8000", "-f", "S16_LE"]
+    # Use -f S16_LE (Signed 16-bit Little Endian) and -r 16000 matching the hardware's native rate
+    aplay_args = ["aplay", "-t", "raw", "-r", "16000", "-f", "S16_LE"]
     if not test_mode:
         aplay_args.insert(1, "-q")
         stdout_dest = subprocess.DEVNULL
