@@ -6,7 +6,7 @@ DefaultDependencies=no
 
 [Service]
 Type=idle
-ExecStart=/usr/bin/python3 /home/root/apps/py2048/dashboard.py
+ExecStart=/bin/sh -c "tmux new-session -A -s calculinux -n Dashboard 'python3 /home/root/apps/py2048/dashboard.py'"
 StandardInput=tty
 StandardOutput=tty
 StandardError=journal

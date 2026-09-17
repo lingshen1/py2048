@@ -51,7 +51,7 @@ class TestCalculinuxDashboard(unittest.TestCase):
         mock_mmap_cls.return_value = mock_map
         
         dash = game_module.CalculinuxDashboard()
-        dash.run_app("python3")
+        dash.run_app("Python", "python3")
         
         # Verify subprocess.run was called once with the correct command
         mock_run.assert_called_once_with("python3", shell=True)

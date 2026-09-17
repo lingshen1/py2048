@@ -285,8 +285,8 @@ class CalculinuxDashboard:
                 {"name": "CalcBig", "cmd": "python3 /home/root/apps/bigcalc.py", "icon": "K", "color": (255, 105, 180)}
             ],
             [
-                {"name": "TestFB", "cmd": "python3 /home/root/apps/test_fb.py", "icon": "F", "color": (70, 130, 180)},
-                {"name": "Shell", "cmd": "/bin/sh", "icon": "S", "color": (128, 128, 128)},
+                {"name": "Music", "cmd": "mpg123 -C -a plug:bluealsa /home/root/music/*.mp3", "icon": "U", "color": (70, 130, 180)},
+                {"name": "Shell", "cmd": "/bin/sh -i", "icon": "S", "color": (128, 128, 128)},
                 {"name": "RevText", "cmd": "python3 /home/root/apps/py2048/reversi.py", "icon": "V", "color": (0, 128, 128)},
                 {"name": "2048Text", "cmd": "python3 /home/root/apps/py2048/2048.py", "icon": "8", "color": (128, 0, 0)}
             ]
@@ -344,23 +344,30 @@ class CalculinuxDashboard:
                 
         self.display.flush()
 
-    def run_app(self, cmd):
-        # 1. Clear and release FB display resources to allow the app to claim /dev/fb0 if it has its own fb driver
+    def run_app(self, name, cmd):
+        # 1. Clear and release FB display resources
         self.display.clear(0, 0, 0)
         self.display.flush()
         
-        # 2. Spawn and run the application in canonical terminal mode (stty restored)
-        console.clear()
-        console.print(f"[bold green]Launching: {cmd}...[/bold green]\n")
-        try:
-            # Run the command and block until it exits
-            subprocess.run(cmd, shell=True)
-        except Exception as e:
-            console.print(f"[red]Error running application: {e}[/red]")
-            time.sleep(2.0)
-            
-        # 3. Clean up the console on exit and redraw dashboard immediately
-        console.clear()
+        # 2. Check if we are running inside a TMUX session for non-blocking multi-window multitasking!
+        if "TMUX" in os.environ:
+            tmux_cmd = f"tmux new-window -n '{name}' '{cmd}'"
+            try:
+                subprocess.run(tmux_cmd, shell=True)
+            except Exception as e:
+                console.print(f"[red]Error creating tmux window: {e}[/red]")
+                time.sleep(1.0)
+        else:
+            # Standalone blocking mode: Spawn and run locally in canonical terminal mode (stty restored)
+            console.clear()
+            console.print(f"[bold green]Launching: {cmd}...[/bold green]\n")
+            try:
+                subprocess.run(cmd, shell=True)
+            except Exception as e:
+                console.print(f"[red]Error running application: {e}[/red]")
+                time.sleep(2.0)
+                
+            console.clear()
 
 
 def main():
@@ -393,12 +400,14 @@ def main():
                 # Launch application!
                 app = dashboard.grid[dashboard.cursor_r][dashboard.cursor_c]
                 
-                # Temporarily suspend RawTerminal wrapper settings to let the launched app claim control of terminal
-                os.system("stty sane 2>/dev/null")
-                dashboard.run_app(app["cmd"])
-                
-                # Re-apply non-canonical raw terminal input settings on return
-                os.system("stty -icanon -echo 2>/dev/null")
+                if "TMUX" in os.environ:
+                    # In TMUX: launch non-blockingly directly in a new window!
+                    dashboard.run_app(app["name"], app["cmd"])
+                else:
+                    # Standalone mode: Temporarily suspend RawTerminal wrapper settings to let launched app run locally
+                    os.system("stty sane 2>/dev/null")
+                    dashboard.run_app(app["name"], app["cmd"])
+                    os.system("stty -icanon -echo 2>/dev/null")
 
 
 if __name__ == "__main__":
