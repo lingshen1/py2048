@@ -303,3 +303,7 @@ The Othello AI uses a depth-3/4 Minimax Search with Alpha-Beta Pruning, guided b
   ```bash
   python3 reversi.py -g
   ```
+* **To test the Händel victory audio song**:
+  ```bash
+  python3 reversi.py -p
+  ```

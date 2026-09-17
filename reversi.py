@@ -970,6 +970,20 @@ def check_and_save_reversi_leaderboard(score, bot_score, game=None):
 
 
 def main():
+    if "-p" in sys.argv or "--play-song" in sys.argv:
+        if not is_sound_driver_detected():
+            console.print("[red]Error: No active ALSA soundcard or driver detected.[/red]")
+            return
+        if not shutil.which("aplay"):
+            console.print("[red]Error: ALSA 'aplay' utility not found in system PATH.[/red]")
+            return
+            
+        console.print("[green]Playing Händel's 'See, the conquering hero comes!' victory melody as a test...[/green]")
+        play_victory_song()
+        # Keep process alive for 5.5s so background aplay can complete playing the piped audio
+        time.sleep(5.5)
+        return
+
     game = ReversiGame()
     
     with RawTerminal():
