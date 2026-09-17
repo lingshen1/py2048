@@ -559,9 +559,12 @@ class ReversiGame:
                     row_cells.append(f"[{style}]{cell_char:^3}[/{style}]")
             table.add_row(*row_cells)
             
+        legend = "[Arrows/WASD] Move Cursor | [Space/Enter] Play Disc | [Q] Quit"
+        if "TMUX" in os.environ:
+            legend += " | [H] Home"
         panel = Panel(
             table,
-            subtitle="[bold dim][Arrows/WASD] Move Cursor | [Space/Enter] Play Disc | [Q] Quit[/bold dim]",
+            subtitle=f"[bold dim]{legend}[/bold dim]",
             expand=False
         )
         console.print(panel)
@@ -1068,6 +1071,9 @@ def main():
                     if black > white:
                         check_and_save_reversi_leaderboard(black, white, game)
                     return
+                elif key == "h":
+                    if "TMUX" in os.environ:
+                        subprocess.run("tmux select-window -t calculinux:Dashboard", shell=True)
                 elif key in ["d", "s"]: # Forward step in valid moves
                     game.cursor_idx = (game.cursor_idx + 1) % len(valid_coords)
                     game.cursor_r, game.cursor_c = valid_coords[game.cursor_idx]

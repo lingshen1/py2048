@@ -653,7 +653,10 @@ class Game2048:
                 formatted_row.append(f"[{style}]  {text:^4}  [/{style}]")
             table.add_row(*formatted_row)
 
-        subtitle_str = "[bold dim][Arrows/WASD] Move | [R] Recall | [I] Invert | [Q] Quit[/bold dim]"
+        legend = "[Arrows/WASD] Move | [R] Recall | [I] Invert | [Q] Quit"
+        if "TMUX" in os.environ:
+            legend += " | [H] Home"
+        subtitle_str = f"[bold dim]{legend}[/bold dim]"
         if getattr(self, "auto_play", False):
             subtitle_str = "[bold dim]🤖 AUTO-PLAY BOT MODE | [I] Invert | [Q] Stop[/bold dim]"
         elif self.has_won and not self.won_announced:
@@ -1770,7 +1773,12 @@ def run_udp_server(port=10000):
                         game.inverted_mode = not game.inverted_mode
                     elif key == "r":
                         game.recall_step()
-                    elif key in ["h", "?"]:
+                    elif key == "h":
+                        if "TMUX" in os.environ:
+                            subprocess.run("tmux select-window -t calculinux:Dashboard", shell=True)
+                        else:
+                            show_help_screen("game")
+                    elif key == "?":
                         show_help_screen("game")
                     elif key in ["w", "a", "s", "d"]:
                         if not game_over:
@@ -1856,7 +1864,12 @@ def run_active_game(game):
                 game.inverted_mode = not game.inverted_mode
             elif key == "r":
                 game.recall_step()
-            elif key in ["h", "?"]:
+            elif key == "h":
+                if "TMUX" in os.environ:
+                    subprocess.run("tmux select-window -t calculinux:Dashboard", shell=True)
+                else:
+                    show_help_screen("game")
+            elif key == "?":
                 show_help_screen("game")
             elif key in ["w", "a", "s", "d"]:
                 if game.has_won:
