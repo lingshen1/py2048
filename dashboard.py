@@ -278,7 +278,7 @@ class CalculinuxDashboard:
                 {"name": "2048", "cmd": "python3 /home/root/apps/py2048/2048.py -g", "icon": "2", "color": (255, 215, 0)}
             ],
             [
-                {"name": "NES", "cmd": "/home/root/games/RomCollection/nes/s /home/root/games/RomCollection/nes/s/super_mario_brothers_duck_hunt.nes", "icon": "N", "color": (30, 144, 255)},
+                {"name": "NES", "cmd": "HOME=/home/root /home/root/games/RomCollection/nes/s/s /home/root/games/RomCollection/nes/s/super_mario_brothers_duck_hunt.nes", "icon": "N", "color": (30, 144, 255)},
                 {"name": "Python", "cmd": "python3", "icon": "P", "color": (148, 0, 211)},
                 {"name": "WiFi", "cmd": "/home/root/wifi_connect.sh", "icon": "W", "color": (0, 206, 209)},
                 {"name": "Bluetooth", "cmd": "/home/root/connect_bt.sh", "icon": "B", "color": (255, 69, 0)}
