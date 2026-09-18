@@ -259,13 +259,6 @@ def get_key():
     return ch.lower()
 
 
-def get_key_nonblocking(timeout=0.25):
-    rlist, _, _ = select.select([sys.stdin], [], [], timeout)
-    if rlist:
-        return get_key()
-    return None
-
-
 class CalculinuxDashboard:
     def __init__(self):
         self.display = FramebufferDisplay()
@@ -406,12 +399,9 @@ def main():
             dashboard.render()
             
             try:
-                key = get_key_nonblocking(0.25)
+                key = get_key()
             except (KeyboardInterrupt, EOFError):
                 break
-                
-            if key is None:
-                continue
                 
             if key == "q":
                 dashboard.display.clear(0, 0, 0)
