@@ -54,6 +54,11 @@ BITMAP_FONT = {
     'd': [0x78, 0x6C, 0x66, 0x66, 0x66, 0x6C, 0x78, 0x00],
     'h': [0x66, 0x66, 0x66, 0x7E, 0x66, 0x66, 0x66, 0x00],
     'k': [0x66, 0x6C, 0x78, 0x70, 0x78, 0x6C, 0x66, 0x00],
+    'f': [0x7E, 0x60, 0x7C, 0x60, 0x60, 0x60, 0x60, 0x00],
+    'x': [0x66, 0x66, 0x24, 0x18, 0x24, 0x66, 0x66, 0x00],
+    'j': [0x0E, 0x06, 0x06, 0x06, 0x06, 0x66, 0x3C, 0x00],
+    'q': [0x3C, 0x66, 0x66, 0x3E, 0x06, 0x0E, 0x3D, 0x00],
+    'z': [0x7E, 0x06, 0x0C, 0x18, 0x30, 0x60, 0x7E, 0x00],
     ' ': [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
     '-': [0x00, 0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0x00],
     ':': [0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x00, 0x00],
@@ -254,6 +259,13 @@ def get_key():
     return ch.lower()
 
 
+def get_key_nonblocking(timeout=0.25):
+    rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+    if rlist:
+        return get_key()
+    return None
+
+
 class CalculinuxDashboard:
     def __init__(self):
         self.display = FramebufferDisplay()
@@ -296,30 +308,30 @@ class CalculinuxDashboard:
         # 1. Clear Screen
         self.display.clear(25, 25, 25)
         
-        # 2. Draw Top Status Header (Height 40px)
-        self.display.draw_rect(0, 0, 320, 32, 15, 15, 15)
-        self.display.draw_string("CALCULINUX DASHBOARD", 10, 10, 1, 255, 215, 0)
+        # 2. Draw Top Status Header (Moved up, height 24px)
+        self.display.draw_rect(0, 0, 320, 24, 15, 15, 15)
+        self.display.draw_string("CALCULINUX DASHBOARD", 10, 6, 1, 255, 215, 0)
         
         # Draw battery and wifi status indicator placeholders in top-right
-        self.display.draw_string("WIFI", 240, 10, 1, 0, 255, 255)
-        self.display.draw_string("100%", 280, 10, 1, 0, 255, 0)
+        self.display.draw_string("WIFI", 240, 6, 1, 0, 255, 255)
+        self.display.draw_string("100%", 280, 6, 1, 0, 255, 0)
         
-        # 3. Draw 4x4 Grid (Each cell is 80x70 pixels total slot)
+        # 3. Draw 4x4 Grid (Each cell is 80x64 pixels total slot, moved up!)
         icon_w = 54
-        icon_h = 48
-        offset_y = 40
+        icon_h = 42
+        offset_y = 26
         
         for r in range(4):
             for c in range(4):
                 app = self.grid[r][c]
                 is_selected = (r == self.cursor_r and c == self.cursor_c)
                 
-                # Center coordinates within the 80x70 slot
+                # Center coordinates within the 80x64 slot
                 slot_x = c * 80
-                slot_y = offset_y + r * 70
+                slot_y = offset_y + r * 64
                 
                 cell_x = slot_x + 13
-                cell_y = slot_y + 6
+                cell_y = slot_y + 4
                 
                 # Draw 3D rounded colored block background
                 self.display.draw_rounded_rect_3d(
@@ -330,14 +342,14 @@ class CalculinuxDashboard:
                 # Draw the App Icon Letter (Centered scale 3, very big and nice!)
                 # 8px letter width * scale 3 = 24px wide. Centered: (54 - 24) // 2 = 15 offset
                 self.display.draw_char(
-                    app["icon"], cell_x + 15, cell_y + 12, 3, 255, 255, 255
+                    app["icon"], cell_x + 15, cell_y + 9, 3, 255, 255, 255
                 )
                 
                 # Draw the App Name Label below the rounded box (centered, scale 1)
                 label = app["name"]
                 # 8px letter width * scale 1 = 8px wide. Centered: (80 - len*8) // 2
                 label_x = slot_x + (80 - len(label) * 8) // 2
-                label_y = slot_y + 57
+                label_y = slot_y + 50
                 
                 label_color = (255, 215, 0) if is_selected else (200, 200, 200)
                 self.display.draw_string(label, label_x, label_y, 1, *label_color)
@@ -394,9 +406,12 @@ def main():
             dashboard.render()
             
             try:
-                key = get_key()
+                key = get_key_nonblocking(0.25)
             except (KeyboardInterrupt, EOFError):
                 break
+                
+            if key is None:
+                continue
                 
             if key == "q":
                 dashboard.display.clear(0, 0, 0)
