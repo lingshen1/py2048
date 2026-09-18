@@ -255,6 +255,19 @@ class MP3Browser:
         self.cursor_idx = 0
         self.viewport_offset = 0
 
+    def is_item_tagged(self, item):
+        if item["name"] == "..":
+            return False
+        full_path = os.path.join(self.current_dir, item["name"])
+        if item["is_dir"]:
+            playable_files = []
+            for root, _, files in os.walk(full_path):
+                for f in files:
+                    if f.lower().endswith((".mp3", ".wma")):
+                        playable_files.append(os.path.join(root, f))
+            return len(playable_files) > 0 and any(f in self.tagged_files for f in playable_files)
+        return full_path in self.tagged_files
+
     def draw_terminal(self):
         console.clear()
         
@@ -273,8 +286,7 @@ class MP3Browser:
             item = self.items[idx]
             is_selected = (idx == self.cursor_idx)
             
-            full_path = os.path.join(self.current_dir, item["name"])
-            is_tagged = full_path in self.tagged_files
+            is_tagged = self.is_item_tagged(item)
             
             item_type = "[DIR]" if item["is_dir"] else "[MP3]"
             name_str = f"* {item['name']}" if is_tagged else item["name"]
@@ -330,8 +342,7 @@ class MP3Browser:
             item = self.items[idx]
             is_selected = (idx == self.cursor_idx)
             
-            full_path = os.path.join(self.current_dir, item["name"])
-            is_tagged = full_path in self.tagged_files
+            is_tagged = self.is_item_tagged(item)
             
             slot_y = 65 + (idx - start_idx) * row_height
             
