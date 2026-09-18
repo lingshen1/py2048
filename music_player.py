@@ -209,6 +209,7 @@ class MP3Browser:
         self.cursor_idx = 0
         self.viewport_offset = 0
         self.items = []
+        self.tagged_files = set() # Store full paths of tagged/selected files
         
         # Check if running in graphical mode
         self.graphical_mode = "-g" in sys.argv
@@ -272,19 +273,27 @@ class MP3Browser:
             item = self.items[idx]
             is_selected = (idx == self.cursor_idx)
             
+            full_path = os.path.join(self.current_dir, item["name"])
+            is_tagged = full_path in self.tagged_files
+            
             item_type = "[DIR]" if item["is_dir"] else "[MP3]"
-            name_str = item["name"]
+            name_str = f"* {item['name']}" if is_tagged else item["name"]
             
             if is_selected:
                 table.add_row(
                     f"[bold yellow]>{item_type}[/bold yellow]",
                     f"[bold yellow]{name_str}[/bold yellow]"
                 )
+            elif is_tagged:
+                table.add_row(
+                    f"[bold green]{item_type}[/bold green]",
+                    f"[bold green]{name_str}[/bold green]"
+                )
             else:
                 table.add_row(item_type, name_str)
                 
         # Draw status panel
-        legend = "[WASD/Arrows] Nav | [Enter/Space] Open/Play | [B/Backspace] Parent Dir | [Q] Quit"
+        legend = "[WASD] Nav | [Enter] Open/Play | [Space] Tag File | [P] Play Selected/All | [B] Back"
         if "TMUX" in os.environ:
             legend += " | [H] Home"
             
@@ -321,19 +330,29 @@ class MP3Browser:
             item = self.items[idx]
             is_selected = (idx == self.cursor_idx)
             
+            full_path = os.path.join(self.current_dir, item["name"])
+            is_tagged = full_path in self.tagged_files
+            
             slot_y = 65 + (idx - start_idx) * row_height
             
             # Draw highlight background strip if selected
             if is_selected:
                 self.fb_display.draw_rect(5, slot_y, 310, row_height - 2, 0, 128, 128) # Cyan select bar
-                text_color = (255, 255, 255)
+                text_color = (0, 255, 0) if is_tagged else (255, 255, 255)
                 icon_color = (255, 215, 0)
             else:
-                text_color = (200, 200, 200)
+                text_color = (0, 200, 0) if is_tagged else (200, 200, 200)
                 icon_color = (0, 200, 200) if item["is_dir"] else (150, 150, 150)
                 
-            # Draw type icons: [D] for Directory, [M] for Music file
-            icon_char = "D" if item["is_dir"] else "M"
+            # Draw type icons: [D] for Directory, [*] for Tagged, [M] for Music file
+            if item["is_dir"]:
+                icon_char = "D"
+            elif is_tagged:
+                icon_char = "*"
+                icon_color = (0, 255, 0)
+            else:
+                icon_char = "M"
+                
             self.fb_display.draw_string(f"[{icon_char}]", 10, slot_y + 4, 1, *icon_color)
             
             # Draw item name nicely truncated to prevent screen overflows
@@ -345,7 +364,7 @@ class MP3Browser:
             
         # 4. Draw Footer Status Legend
         self.fb_display.draw_rect(0, 288, 320, 32, 10, 15, 25)
-        legend_str = "WASD:NAV ENTER:PLAY B:BACK Q:QUIT"
+        legend_str = "WASD:NAV ENTER:PLAY SPACE:TAG P:PLAY"
         self.fb_display.draw_string(legend_str, 10, 298, 1, 200, 200, 200)
         
         self.fb_display.flush()
@@ -366,6 +385,12 @@ class MP3Browser:
             self.play_audio_file(full_path)
 
     def play_audio_file(self, file_path):
+        self.play_playlist([file_path])
+
+    def play_playlist(self, paths):
+        if not paths:
+            return
+
         # 1. Clear FB display cleanly so mpg123 can claim output terminal
         if self.fb_display:
             self.fb_display.clear(0, 0, 0)
@@ -373,31 +398,40 @@ class MP3Browser:
 
         # 2. Re-apply standard stty canonical echoing so the user can control mpg123
         os.system("stty sane 2>/dev/null")
-        console.clear()
-
-        # Decide command based on file extension
-        # If .wma, pipe ffmpeg (decoding to MP3) into mpg123 to keep interactive keyboard controls!
-        if file_path.lower().endswith(".wma"):
-            cmd = f"ffmpeg -loglevel quiet -i '{file_path}' -f mp3 - | mpg123 -C -a plug:bluealsa -"
-            console.print(f"[bold green]Streaming WMA audio (via ffmpeg pipe to mpg123)...[/bold green]\n")
-        else:
-            cmd = f"mpg123 -C -a plug:bluealsa '{file_path}'"
-            console.print(f"[bold green]Launching interactive mpg123 player...[/bold green]\n")
-
-        console.print(f"[dim]File: {os.path.basename(file_path)}[/dim]\n")
-        console.print("[bold yellow]Interactive Controls:[/bold yellow]")
-        console.print("  [s] or [Space] : Pause / Resume")
-        console.print("  [d] : Skip/Next")
-        console.print("  [f] : Fast-forward")
-        console.print("  [+] or [-] : Volume up / down")
-        console.print("  [q] : Quit and return to browser")
-        console.print("\n----------------------------------------\n")
-
-        try:
-            subprocess.run(cmd, shell=True)
-        except Exception as e:
-            console.print(f"[red]Error playing audio: {e}[/red]")
-            time.sleep(2.0)
+        
+        total_songs = len(paths)
+        for idx, path in enumerate(paths):
+            console.clear()
+            console.print(f"[bold green]Playing playlist ({idx + 1}/{total_songs})...[/bold green]\n")
+            console.print(f"[bold cyan]File:[/bold cyan] {os.path.basename(path)}")
+            console.print(f"[dim]Path: {path}[/dim]\n")
+            
+            console.print("[bold yellow]Interactive Controls:[/bold yellow]")
+            console.print("  [s] or [Space] : Pause / Resume")
+            console.print("  [d] : Skip to Next Song")
+            console.print("  [f] : Fast-forward")
+            console.print("  [+] or [-] : Volume up / down")
+            console.print("  [q] : Quit entire playlist")
+            console.print("\n----------------------------------------\n")
+            
+            if path.lower().endswith(".wma"):
+                cmd = f"ffmpeg -loglevel quiet -i '{path}' -f mp3 - | mpg123 -C -a plug:bluealsa -"
+            else:
+                cmd = f"mpg123 -C -a plug:bluealsa '{path}'"
+                
+            try:
+                res = subprocess.run(cmd, shell=True)
+                if res.returncode in [130, -2, 2]: # standard shell abort codes
+                    console.print("\n[yellow]Playlist playback aborted by user.[/yellow]")
+                    time.sleep(1.0)
+                    break
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Playlist playback stopped by user.[/yellow]")
+                time.sleep(1.0)
+                break
+            except Exception as e:
+                console.print(f"[red]Error playing audio: {e}[/red]")
+                time.sleep(2.0)
 
         # 3. Restore non-canonical raw terminal input on exit
         os.system("stty -icanon -echo 2>/dev/null")
@@ -441,9 +475,46 @@ class MP3Browser:
                         max_visible = 9 if self.graphical_mode else 12
                         if self.cursor_idx >= self.viewport_offset + max_visible:
                             self.viewport_offset = self.cursor_idx - max_visible + 1
-                elif key in [" ", "\r", "\n"]:
-                    # Open folder or play file!
+                elif key == " ":
+                    # Tag / Untag selection!
+                    if self.items:
+                        selected = self.items[self.cursor_idx]
+                        if selected["name"] != "..":
+                            target_path = os.path.join(self.current_dir, selected["name"])
+                            if selected["is_dir"]:
+                                # Gather all playable files recursively under this directory
+                                playable_files = []
+                                for root, _, files in os.walk(target_path):
+                                    for f in files:
+                                        if f.lower().endswith((".mp3", ".wma")):
+                                            playable_files.append(os.path.join(root, f))
+                                if any(f in self.tagged_files for f in playable_files):
+                                    # Untag all
+                                    self.tagged_files.difference_update(playable_files)
+                                else:
+                                    # Tag all
+                                    self.tagged_files.update(playable_files)
+                            else:
+                                # Toggle single file tag
+                                if target_path in self.tagged_files:
+                                    self.tagged_files.remove(target_path)
+                                else:
+                                    self.tagged_files.add(target_path)
+                elif key in ["\r", "\n"]:
+                    # Open folder or play single file immediately
                     self.run_selected()
+                elif key == "p":
+                    # Play selection or entire folder!
+                    if self.tagged_files:
+                        # Play all tagged files sorted alphabetically
+                        self.play_playlist(sorted(list(self.tagged_files)))
+                    else:
+                        # Play all playable files in the current folder sorted alphabetically
+                        current_playable = []
+                        for item in self.items:
+                            if not item["is_dir"]:
+                                current_playable.append(os.path.join(self.current_dir, item["name"]))
+                        self.play_playlist(sorted(current_playable))
                 elif key in ["b", "a"]: # Back (b key or Left Arrow/A key)
                     self.go_back()
                     

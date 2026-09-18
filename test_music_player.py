@@ -84,6 +84,28 @@ class TestMP3Browser(unittest.TestCase):
         args, kwargs = mock_run.call_args
         self.assertIn("mpg123", args[0])
 
+    @patch("subprocess.run")
+    @patch("mmap.mmap")
+    @patch("builtins.open")
+    def test_multi_file_tagging_and_playlist(self, mock_open, mock_mmap_cls, mock_run):
+        mock_map = MagicMock()
+        mock_mmap_cls.return_value = mock_map
+        
+        browser = player_module.MP3Browser(self.test_dir)
+        
+        # 1. Tag song1.mp3
+        song_path = os.path.join(self.test_dir, "song1.mp3")
+        browser.tagged_files.add(song_path)
+        self.assertIn(song_path, browser.tagged_files)
+        
+        # 2. Trigger play on selection
+        browser.play_playlist(sorted(list(browser.tagged_files)))
+        
+        # Verify run was called on song1.mp3
+        mock_run.assert_called_once()
+        args, kwargs = mock_run.call_args
+        self.assertIn("song1.mp3", args[0])
+
 
 if __name__ == "__main__":
     unittest.main()
