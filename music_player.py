@@ -370,35 +370,35 @@ class MP3Browser:
         if self.fb_display:
             self.fb_display.clear(0, 0, 0)
             self.fb_display.flush()
-            
+
         # 2. Re-apply standard stty canonical echoing so the user can control mpg123
         os.system("stty sane 2>/dev/null")
         console.clear()
-        
-        # Decide command based on file extension (.wma uses ffmpeg, .mp3 uses mpg123)
+
+        # Decide command based on file extension
+        # If .wma, pipe ffmpeg (decoding to MP3) into mpg123 to keep interactive keyboard controls!
         if file_path.lower().endswith(".wma"):
-            cmd = f"ffmpeg -i '{file_path}' -f s16le -ac 2 -ar 44100 - | aplay -D plug:default -t raw -r 44100 -f S16_LE"
-            console.print(f"[bold green]Streaming WMA audio directly to Bluetooth...[/bold green]\n")
-            console.print(f"[dim]File: {os.path.basename(file_path)}[/dim]\n")
-            console.print("[yellow]Press [Ctrl+C] to stop playback and return.[/yellow]\n")
+            cmd = f"ffmpeg -loglevel quiet -i '{file_path}' -f mp3 - | mpg123 -C -a plug:bluealsa -"
+            console.print(f"[bold green]Streaming WMA audio (via ffmpeg pipe to mpg123)...[/bold green]\n")
         else:
             cmd = f"mpg123 -C -a plug:bluealsa '{file_path}'"
             console.print(f"[bold green]Launching interactive mpg123 player...[/bold green]\n")
-            console.print(f"[dim]File: {os.path.basename(file_path)}[/dim]\n")
-            console.print("[bold yellow]Interactive Controls:[/bold yellow]")
-            console.print("  [s] or [Space] : Pause / Resume")
-            console.print("  [d] : Skip/Next")
-            console.print("  [f] : Fast-forward")
-            console.print("  [+] or [-] : Volume up / down")
-            console.print("  [q] : Quit and return to browser")
-            console.print("\n----------------------------------------\n")
-            
+
+        console.print(f"[dim]File: {os.path.basename(file_path)}[/dim]\n")
+        console.print("[bold yellow]Interactive Controls:[/bold yellow]")
+        console.print("  [s] or [Space] : Pause / Resume")
+        console.print("  [d] : Skip/Next")
+        console.print("  [f] : Fast-forward")
+        console.print("  [+] or [-] : Volume up / down")
+        console.print("  [q] : Quit and return to browser")
+        console.print("\n----------------------------------------\n")
+
         try:
             subprocess.run(cmd, shell=True)
         except Exception as e:
             console.print(f"[red]Error playing audio: {e}[/red]")
             time.sleep(2.0)
-            
+
         # 3. Restore non-canonical raw terminal input on exit
         os.system("stty -icanon -echo 2>/dev/null")
         console.clear()
