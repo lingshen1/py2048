@@ -259,11 +259,25 @@ def get_key():
     return ch.lower()
 
 
+def get_key_nonblocking(timeout=1.0):
+    import select
+    rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+    if rlist:
+        return get_key()
+    return None
+
+
 class CalculinuxDashboard:
     def __init__(self):
         self.display = FramebufferDisplay()
         self.cursor_r = 0
         self.cursor_c = 0
+        
+        # Power management
+        self.last_activity_time = time.time()
+        self.is_asleep = False
+        self.original_governors = {}
+        self.needs_redraw = True
         
         # 4x4 Grid of Applications (Total 16 Slots)
         # Name: string labels shown below icons
@@ -296,6 +310,69 @@ class CalculinuxDashboard:
                 {"name": "2048Text", "cmd": "python3 /home/root/apps/py2048/2048.py", "icon": "8", "color": (128, 0, 0)}
             ]
         ]
+
+    def enter_low_power_mode(self):
+        self.is_asleep = True
+        # 1. Blank display
+        self.display.clear(0, 0, 0)
+        self.display.flush()
+        
+        try:
+            if os.path.exists("/sys/class/graphics/fb0/blank"):
+                with open("/sys/class/graphics/fb0/blank", "w") as f:
+                    f.write("1")
+        except Exception:
+            pass
+            
+        # 2. Put CPUs into powersave governor
+        try:
+            cpu_dir = "/sys/devices/system/cpu"
+            if os.path.exists(cpu_dir):
+                for node in os.listdir(cpu_dir):
+                    if node.startswith("cpu") and node[3:].isdigit():
+                        gov_path = f"{cpu_dir}/{node}/cpufreq/scaling_governor"
+                        if os.path.exists(gov_path):
+                            with open(gov_path, "r") as f:
+                                self.original_governors[node] = f.read().strip()
+                            with open(gov_path, "w") as f:
+                                f.write("powersave")
+        except Exception:
+            pass
+
+    def exit_low_power_mode(self):
+        self.is_asleep = False
+        # 1. Unblank display
+        try:
+            if os.path.exists("/sys/class/graphics/fb0/blank"):
+                with open("/sys/class/graphics/fb0/blank", "w") as f:
+                    f.write("0")
+        except Exception:
+            pass
+            
+        # 2. Restore original CPUs governor mode
+        try:
+            cpu_dir = "/sys/devices/system/cpu"
+            for node, orig_gov in self.original_governors.items():
+                gov_path = f"{cpu_dir}/{node}/cpufreq/scaling_governor"
+                if os.path.exists(gov_path):
+                    with open(gov_path, "w") as f:
+                        f.write(orig_gov)
+        except Exception:
+            pass
+        self.needs_redraw = True
+
+    def is_window_active(self):
+        if "TMUX" not in os.environ:
+            return True
+            
+        try:
+            res = subprocess.run(
+                ["tmux", "display-message", "-p", "#{window_name}"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=1.0
+            )
+            return res.stdout.strip() == "Dashboard"
+        except Exception:
+            return True
 
     def render(self):
         # 1. Clear Screen
@@ -396,12 +473,34 @@ def main():
     
     with RawTerminal():
         while True:
-            dashboard.render()
-            
+            if dashboard.needs_redraw:
+                dashboard.render()
+                dashboard.needs_redraw = False
+                
             try:
-                key = get_key()
+                # 1.0 second non-blocking read to allow periodic idle checking without high CPU overhead
+                key = get_key_nonblocking(1.0)
             except (KeyboardInterrupt, EOFError):
                 break
+                
+            if key is None:
+                # No key was pressed. Check active focus and idle duration
+                if not dashboard.is_window_active():
+                    # If they are currently in another window (playing Reversi/2048), reset the idle timer
+                    dashboard.last_activity_time = time.time()
+                else:
+                    # If active on Dashboard, check for 5 minutes (300 seconds) idle timeout
+                    if time.time() - dashboard.last_activity_time > 300 and not dashboard.is_asleep:
+                        dashboard.enter_low_power_mode()
+                continue
+                
+            # Key WAS pressed! Update activity time
+            dashboard.last_activity_time = time.time()
+            
+            # If the system was asleep, exit low-power mode and consume the wake key safely
+            if dashboard.is_asleep:
+                dashboard.exit_low_power_mode()
+                continue
                 
             if key == "q":
                 dashboard.display.clear(0, 0, 0)
@@ -411,12 +510,16 @@ def main():
                 break
             elif key == "a": # Left
                 dashboard.cursor_c = (dashboard.cursor_c - 1) % 4
+                dashboard.needs_redraw = True
             elif key == "d": # Right
                 dashboard.cursor_c = (dashboard.cursor_c + 1) % 4
+                dashboard.needs_redraw = True
             elif key == "w": # Up
                 dashboard.cursor_r = (dashboard.cursor_r - 1) % 4
+                dashboard.needs_redraw = True
             elif key == "s": # Down
                 dashboard.cursor_r = (dashboard.cursor_r + 1) % 4
+                dashboard.needs_redraw = True
             elif key in [" ", "\r", "\n"]:
                 # Launch application!
                 app = dashboard.grid[dashboard.cursor_r][dashboard.cursor_c]
@@ -429,6 +532,9 @@ def main():
                     os.system("stty sane 2>/dev/null")
                     dashboard.run_app(app["name"], app["cmd"])
                     os.system("stty -icanon -echo 2>/dev/null")
+                
+                # Make sure to redraw when returning
+                dashboard.needs_redraw = True
 
 
 if __name__ == "__main__":
