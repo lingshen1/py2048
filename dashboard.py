@@ -284,7 +284,7 @@ class CalculinuxDashboard:
                 {"name": "Bluetooth", "cmd": "/home/root/connect_bt.sh", "icon": "B", "color": (255, 69, 0)}
             ],
             [
-                {"name": "mc", "cmd": "mc", "icon": "M", "color": (46, 139, 87)},
+                {"name": "mc", "cmd": "HOME=/home/root mc", "icon": "M", "color": (46, 139, 87)},
                 {"name": "Top", "cmd": "top", "icon": "O", "color": (112, 128, 144)},
                 {"name": "Dogfight", "cmd": "python3 /home/root/apps/dogfight.py", "icon": "D", "color": (218, 165, 32)},
                 {"name": "CalcBig", "cmd": "python3 /home/root/apps/bigcalc.py", "icon": "K", "color": (255, 105, 180)}
